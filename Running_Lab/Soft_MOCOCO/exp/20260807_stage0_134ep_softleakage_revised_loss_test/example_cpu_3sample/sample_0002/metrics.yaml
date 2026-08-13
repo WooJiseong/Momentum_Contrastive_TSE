@@ -1,0 +1,20 @@
+sample_index: 2
+utt_id: '2'
+sample_rate: 16000
+duration_seconds: 3.0
+checkpoint: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Soft_MOCOCO/exp/20260807_stage0_134ep_softleakage_revised_loss_test/stage1_tfgridnet/checkpoints/tfgridnet_best.ckpt
+sign_correction: true
+sign_flipped: false
+metrics:
+  si_sdr: -1.284935712814331
+  si_sdri: 4.970869064331055
+  snr: 0.9092676639556885
+  snri: 7.242815971374512
+  input_si_sdr: -6.255805015563965
+  input_snr: -6.333548545837402
+audio:
+  mixture: mixture.wav
+  target: target.wav
+  positive_enrollment: positive_enrollment.wav
+  negative_enrollment: negative_enrollment.wav
+  estimate: estimate.wav

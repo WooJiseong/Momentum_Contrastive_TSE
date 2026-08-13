@@ -1,0 +1,74 @@
+date: '20260730'
+num_epochs: 50
+runs:
+- condition: baseline
+  depth: 3
+  fusion_layer:
+  - 0
+  - 1
+  - 2
+  project: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll
+  run_dir: exp/20260730_depth_sweep_baseline_n3_fullfusion_50ep
+  config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll/exp/20260730_depth_sweep_baseline_n3_fullfusion_50ep/config_tfgridnet_baseline.yaml
+  slurm_script: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll/exp/20260730_depth_sweep_baseline_n3_fullfusion_50ep/slurm_train_eval.sh
+- condition: mococo
+  depth: 3
+  fusion_layer:
+  - 0
+  - 1
+  - 2
+  project: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO
+  run_dir: exp/20260730_depth_sweep_mococo_mocobest_n3_fullfusion_50ep
+  config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n3_fullfusion_50ep/config_tfgridnet_supervised.yaml
+  moco_config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n3_fullfusion_50ep/config_moco_encoder.yaml
+  slurm_script: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n3_fullfusion_50ep/slurm_train_eval.sh
+- condition: baseline
+  depth: 4
+  fusion_layer:
+  - 0
+  - 1
+  - 2
+  - 3
+  project: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll
+  run_dir: exp/20260730_depth_sweep_baseline_n4_fullfusion_50ep
+  config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll/exp/20260730_depth_sweep_baseline_n4_fullfusion_50ep/config_tfgridnet_baseline.yaml
+  slurm_script: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll/exp/20260730_depth_sweep_baseline_n4_fullfusion_50ep/slurm_train_eval.sh
+- condition: mococo
+  depth: 4
+  fusion_layer:
+  - 0
+  - 1
+  - 2
+  - 3
+  project: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO
+  run_dir: exp/20260730_depth_sweep_mococo_mocobest_n4_fullfusion_50ep
+  config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n4_fullfusion_50ep/config_tfgridnet_supervised.yaml
+  moco_config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n4_fullfusion_50ep/config_moco_encoder.yaml
+  slurm_script: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n4_fullfusion_50ep/slurm_train_eval.sh
+- condition: baseline
+  depth: 6
+  fusion_layer:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  project: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll
+  run_dir: exp/20260730_depth_sweep_baseline_n6_fullfusion_50ep
+  config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll/exp/20260730_depth_sweep_baseline_n6_fullfusion_50ep/config_tfgridnet_baseline.yaml
+  slurm_script: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/TSE-through-Positive-Negative-Enroll/exp/20260730_depth_sweep_baseline_n6_fullfusion_50ep/slurm_train_eval.sh
+- condition: mococo
+  depth: 6
+  fusion_layer:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  project: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO
+  run_dir: exp/20260730_depth_sweep_mococo_mocobest_n6_fullfusion_50ep
+  config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n6_fullfusion_50ep/config_tfgridnet_supervised.yaml
+  moco_config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n6_fullfusion_50ep/config_moco_encoder.yaml
+  slurm_script: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_MOCOCO/exp/20260730_depth_sweep_mococo_mocobest_n6_fullfusion_50ep/slurm_train_eval.sh

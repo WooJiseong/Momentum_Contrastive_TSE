@@ -1,0 +1,26 @@
+base_config: ../PN_MOCOCO/configs/config_tfgridnet_supervised.yaml
+
+experiment:
+  name: pn_indiv_mococo_stage1_individual_nuisance
+  date: 20260804
+
+paths:
+  initial_model_ckpt: ../../../checkpoints/proposed-monaural.pt
+  encoder_override_ckpt: exp/20260802_indiv_mococo/stage0_moco/checkpoints/pn_encoder_best.pt
+  strict_initial_model: true
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+loss:
+  type: si_sdr_plus_target_orthogonal_leakage
+  orthogonal_leakage_weight: 0.1
+  orthogonal_window_size: 2048
+  orthogonal_hop_size: 1024
+  orthogonal_gate_threshold: 0.1
+  orthogonal_eps: 1.0e-8
+  verify_nuisance_contract: true
+  fail_on_nonfinite: true

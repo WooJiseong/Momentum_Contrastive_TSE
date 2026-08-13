@@ -1,0 +1,19 @@
+created_at: '2026-08-10T12:37:16+09:00'
+tool: tools/sample_audio_mkr/make_samples.py
+lab_dir: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Soft_MOCOCO
+backend: pn_mococo
+checkpoint: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Soft_MOCOCO/exp/20260806_stage0_159ep_softleakage_test/stage1_tfgridnet/checkpoints/tfgridnet_best.ckpt
+checkpoint_sha256: 73037a6a7f594df7ee02c3a6376bf37361ce02c3e873dd324b7fcfd9ee23e7c9
+source_config: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Soft_MOCOCO/exp/20260806_stage0_159ep_softleakage_test/config_tfgridnet_soft_runtime.yaml
+device: cpu
+dataset:
+  split: LibriSpeech/test-clean
+  sample_rate: 16000
+  fixed_indices:
+  - 0
+  - 1
+  - 2
+audio_format:
+  container: WAV
+  subtype: FLOAT
+  normalization: none

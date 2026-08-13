@@ -1,0 +1,6 @@
+experiment=pn_indiv_mococo_stage1_individual_nuisance
+created_at=2026-08-04T23:44:48+09:00
+seed=42
+stage0_encoder=exp/20260802_indiv_mococo/stage0_moco/checkpoints/pn_encoder_best.pt
+stage1_loss=negative_si_sdr + 0.1*target_orthogonal_leakage
+leakage_interferers=actual_sample[1:]

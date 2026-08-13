@@ -1,0 +1,33 @@
+base_config: ../PN_MOCOCO/configs/config_tfgridnet_supervised.yaml
+
+experiment:
+  name: stage0_50ep_soft_wo_leakage_test
+  date: 20260803
+
+train:
+  num_epochs: 200
+  log_dir: exp/20260803_stage0_50ep_soft_wo_leakage_test/stage1_tfgridnet
+
+checkpoint:
+  dir: exp/20260803_stage0_50ep_soft_wo_leakage_test/stage1_tfgridnet/checkpoints
+  ckpt_name: tfgridnet_best
+
+paths:
+  initial_model_ckpt: ../../../checkpoints/proposed-monaural.pt
+  encoder_override_ckpt: exp/20260803_stage0_50ep_soft_wo_leakage_test/stage0_moco/checkpoints/pn_encoder_50ep.pt
+  strict_initial_model: true
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+eval:
+  checkpoint: exp/20260803_stage0_50ep_soft_wo_leakage_test/stage1_tfgridnet/checkpoints/tfgridnet_best.ckpt
+  out_json: exp/20260803_stage0_50ep_soft_wo_leakage_test/evaluation/results.json
+  mode: fixed_count
+  test_n: 5000
+  batch_size: 4
+  num_workers: 2
+  sign_correction: true

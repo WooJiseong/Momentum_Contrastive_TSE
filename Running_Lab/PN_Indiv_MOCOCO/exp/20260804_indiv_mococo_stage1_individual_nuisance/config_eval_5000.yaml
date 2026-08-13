@@ -1,0 +1,24 @@
+base_config: ../PN_MOCOCO/configs/config_tfgridnet_supervised.yaml
+
+experiment:
+  name: pn_indiv_mococo_stage1_individual_nuisance
+  date: 20260804
+  run_dir: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_Indiv_MOCOCO/exp/20260804_indiv_mococo_stage1_individual_nuisance
+
+paths:
+  initial_model_ckpt: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/checkpoints/proposed-monaural.pt
+  encoder_override_ckpt: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/PN_Indiv_MOCOCO/exp/20260802_indiv_mococo/stage0_moco/checkpoints/pn_encoder_best.pt
+  strict_initial_model: true
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+eval:
+  mode: fixed_count
+  test_n: 5000
+  batch_size: 4
+  num_workers: 2
+  sign_correction: true

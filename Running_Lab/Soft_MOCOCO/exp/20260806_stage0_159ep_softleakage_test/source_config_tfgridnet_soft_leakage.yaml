@@ -1,0 +1,43 @@
+base_config: ../PN_MOCOCO/configs/config_tfgridnet_supervised.yaml
+
+experiment:
+  name: soft_mococo_stage0_159ep_softleakage
+  date: 20260806
+
+train:
+  num_epochs: 200
+  log_dir: exp/20260806_stage0_159ep_softleakage_test/stage1_tfgridnet
+
+checkpoint:
+  dir: exp/20260806_stage0_159ep_softleakage_test/stage1_tfgridnet/checkpoints
+  ckpt_name: tfgridnet_best
+  resume: null
+
+paths:
+  initial_model_ckpt: ../../../checkpoints/proposed-monaural.pt
+  encoder_override_ckpt: exp/20260806_stage0_159ep_softleakage_test/stage0_moco/checkpoints/pn_encoder_159ep.pt
+  strict_initial_model: true
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+loss:
+  type: si_sdr_plus_target_orthogonal_leakage
+  orthogonal_leakage_weight: 0.1
+  orthogonal_window_size: 2048
+  orthogonal_hop_size: 1024
+  orthogonal_gate_threshold: 0.1
+  orthogonal_eps: 1.0e-8
+  normalize_residual_energy: true
+  activity_gate: true
+  target_activity_threshold: 0.01
+  nuisance_activity_threshold: 0.01
+  verify_nuisance_contract: true
+  fail_on_nonfinite: true
+
+eval:
+  checkpoint: exp/20260806_stage0_159ep_softleakage_test/stage1_tfgridnet/checkpoints/tfgridnet_best.ckpt
+  out_json: exp/20260806_stage0_159ep_softleakage_test/evaluation/results.json

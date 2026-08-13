@@ -1,0 +1,107 @@
+# Python bytecode and local tooling
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Virtual environments and packaging output
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Editors and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.secret
+secrets.yaml
+secrets.yml
+
+# Model weights and training checkpoints
+**/checkpoints/
+**/resume_state/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.pkl
+*.pickle
+
+# TensorBoard and experiment trackers
+**/lightning_logs/
+**/tensorboard/
+**/wandb/
+**/mlruns/
+**/events.out.tfevents.*
+**/hparams.yaml
+
+# Generated runtime metadata and logs
+**/train.log
+**/eval.log
+**/slurm-*.out
+**/slurm-*.err
+**/slurm-*.log
+**/environment*.txt
+**/command.txt
+**/*_runtime.yaml
+**/*_resolved.yaml
+**/config_eval_runtime.yaml
+
+# Generated evaluation and plotting artifacts under experiment folders
+**/exp/**/*.json
+**/exp/**/*.csv
+**/exp/**/*.png
+**/exp/**/*.out
+**/evaluation/results.json
+**/evaluation/*.csv
+**/evaluation/*.png
+**/*_validation_metrics.png
+
+# Audio samples and other media generated for demos
+**/*.wav
+**/*.flac
+**/*.mp3
+**/*.m4a
+**/*.ogg
+
+# Archives and temporary files
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.tmp
+*.bak
+*.swp
+
+# Local Slurm and analysis outputs at repository root
+/*.out
+/slurm-*.out
+/depth_sweep_*.json
+/depth_sweep_*.txt

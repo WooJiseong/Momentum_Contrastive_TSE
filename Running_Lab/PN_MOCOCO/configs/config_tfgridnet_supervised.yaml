@@ -1,0 +1,139 @@
+# PN_MOCOCO stage 1: supervised fine-tuning of the original causal TFGridNet extractor.
+
+experiment:
+  name: pn_mococo
+  date: 20260729
+
+train:
+  batch_size: 2
+  num_epochs: 200
+  accumulation_steps: 4
+  num_workers: 4
+  log_lr: true
+  precision: bf16-mixed
+  log_dir: exp/tfgridnet_mococo
+  log_interval: 20
+  detect_anomaly: false
+  gradient_clip_val: 0.5
+  limit_train_batches: null
+  limit_val_batches: null
+  overfit_batches: 0.0
+
+scheduler:
+  type: CosineAnnealingLR
+  t_max: 200
+  eta_min: 1.0e-06
+  warmup_epochs: 5
+
+model:
+  type: tfgridnet_causal
+  n_fft: 128
+  stride: 64
+  n_layers: 3
+  lstm_hidden_units: 64
+  emb_dim: 64
+  emb_ks: 1
+  model_normalize: true
+  pooling_size: 40
+  fusion_stride: 40
+  fusion_layer: [0, 1]
+  binaural: false
+
+encoder:
+  n_fft: 128
+  stride: 64
+  num_blocks: 3
+  head_layers: 2
+  binaural: false
+
+paths:
+  initial_model_ckpt: ../../../checkpoints/proposed-monaural.pt
+  strict_initial_model: true
+  encoder_override_ckpt: exp/moco_encoder/checkpoints/pn_encoder_best.pt
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+inference:
+  chunk_samples: 16000
+
+dataset:
+  n_fft: 510
+  win_length: 510
+  hop_length: 128
+  sample_rate: 16000
+  segment: 3
+  segment_aux: 3
+  stft_scale: 1.0
+  source_num: 3
+  snr_db_range: [-3, 3]
+  clean_enroll: false
+  special_spk: ["Partial_Pos", "Partial_Neg"]
+  partial_range: [0.33, 0.66]
+  neg_partial_range: [1.0, 1.0]
+  active_num: [-1, 1, -1]
+  train_roots:
+    - LibriSpeech/train-clean-360
+    - LibriSpeech/train-clean-100
+  val_root: LibriSpeech/dev-clean
+  test_root: LibriSpeech/test-clean
+  train_noise: wham_noise/tr
+  val_noise: wham_noise/cv
+  test_noise: wham_noise/tt
+  samples_per_epoch: 10000
+  val_size: 200
+
+enroll:
+  provider: v2b_pn_encoder
+  time: full
+  v2b_use_pos_emb: true
+
+optim:
+  optimizer: AdamW
+  lr: 1.0e-04
+  separator_lr: 1.0e-04
+  encoder_lr: 3.0e-06
+  encoder_head_lr: 1.0e-05
+  weight_decay: 0.01
+
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 4
+  strategy: ddp
+  find_unused_parameters: false
+  broadcast_buffers: false
+
+seed: 42
+
+early_stopping:
+  enabled: false
+  monitor: val_loss
+  patience: 20
+  verbose: true
+  mode: min
+  delta: 0.0
+
+checkpoint:
+  dir: exp/tfgridnet_mococo/checkpoints
+  ckpt_name: tfgridnet_best
+  save_best: 1
+  save_last: true
+  verbose: true
+  monitor: val_loss
+  mode: min
+  resume: null
+
+eval:
+  checkpoint: exp/tfgridnet_mococo/checkpoints/tfgridnet_best.ckpt
+  out_json: exp/eval/tfgridnet_mococo.json
+  mode: fixed_count
+  # The top-level online mixer has no finite full-test manifest; use a larger
+  # deterministic fixed-count evaluation for reportable comparisons.
+  test_n: 5000
+  batch_size: 4
+  num_workers: 2
+  sign_correction: true
