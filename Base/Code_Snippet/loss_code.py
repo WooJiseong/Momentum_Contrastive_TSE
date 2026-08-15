@@ -232,7 +232,7 @@ def target_orthogonal_leakage_loss(
     residual_nuisance_inner = (
         residual_expanded * nuisance_orthogonal
     ).sum(dim=-1)
-
+    # [B, J, W] nuisance_orthogonal의 에너지 Nuisance orthogonal과 residual의 코사인 유사도 계산을 위해 분모에 사용
     nuisance_orthogonal_energy = (
         nuisance_orthogonal.square().sum(dim=-1)
     )
@@ -262,7 +262,7 @@ def target_orthogonal_leakage_loss(
         interferer_windows.square().sum(dim=-1)
     )
 
-    orthogonal_ratio = ( # [B, J, W], 범위 [0,1]
+    orthogonal_ratio = ( # [B, J, W], 범위 [0,1] 커지면 nuisance가 target과 orthogonal, 작으면 target과 유사
         nuisance_orthogonal_energy
         / (nuisance_energy + eps)
     )
