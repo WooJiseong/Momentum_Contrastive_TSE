@@ -97,6 +97,8 @@ def main():
             neg = batch["neg_wave"].float()
             neg_items = batch["neg_waves"].float()
             valid = batch["neg_valid"].bool()
+            target_spk_id = batch.get("target_spk_id")
+            negative_spk_ids = batch.get("negative_spk_ids")
             if train and cfg.get("augment", {}).get("noise_std", 0.0):
                 std = float(cfg["augment"]["noise_std"])
                 pos = pos + torch.randn_like(pos) * std * pos.pow(2).mean(dim=-1, keepdim=True).sqrt().clamp_min(1e-6)
@@ -104,7 +106,14 @@ def main():
             with torch.no_grad():
                 positive = self.model.momentum_embedding(pos, neg)
                 negative = self.model.momentum_negative_embeddings(pos, neg_items, valid)
-            loss, logs = self.model.loss(query, positive, negative, valid)
+            loss, logs = self.model.loss(
+                query,
+                positive,
+                negative,
+                valid,
+                query_speaker_ids=target_spk_id,
+                negative_speaker_ids=negative_spk_ids,
+            )
             if not torch.isfinite(loss):
                 raise FloatingPointError("PN_Indiv_MOCOCO Stage0 produced a non-finite loss.")
             prefix = "train_" if train else "val_"

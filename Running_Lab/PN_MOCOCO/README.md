@@ -42,6 +42,7 @@ extractor.
 ## Main Difference
 
 - Stage 0 trains a momentum encoder with a negative queue.
+- Stage 0 stores the target speaker ID with each queue entry and masks known same-speaker queue entries from the contrastive denominator. Legacy queue entries without IDs remain usable as unknown entries until overwritten.
 - Stage 1 fine-tunes the original causal TFGridNet separator using the exported MoCo PN encoder.
 - The Flow Matching decoder is not used in this Lab.
 

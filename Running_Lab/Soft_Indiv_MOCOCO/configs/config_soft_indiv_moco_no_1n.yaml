@@ -29,6 +29,7 @@ contrastive:
   encoder_lr_scale: 0.03
   teacher_loss_weight: 0.1
   negative_aggregation: sum
+  speaker_aware_negative_mask: true
   projection:
     in_ch: 64
     in_freq: 65

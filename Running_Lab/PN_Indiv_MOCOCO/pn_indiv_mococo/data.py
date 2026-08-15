@@ -7,16 +7,21 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 
 from data.datasets import _build_inner, _noise_dir, _worker_init
+from pn_indiv_mococo.speaker_ids import (
+    build_speaker_to_id,
+    negative_speaker_ids_for_item,
+)
 
 
 class IndividualPNDataset(Dataset):
     """Minimal PN adapter preserving each negative speaker/noise row separately."""
 
-    def __init__(self, inners, dcfg: dict, length: int, train: bool):
+    def __init__(self, inners, dcfg: dict, length: int, train: bool, speaker_to_id: dict[str, int]):
         self.inners = list(inners)
         self.dcfg = dcfg
         self.length = int(length)
         self.train = bool(train)
+        self.speaker_to_id = speaker_to_id
 
     def __len__(self) -> int:
         return self.length
@@ -28,7 +33,16 @@ class IndividualPNDataset(Dataset):
         return self.inners[0][idx]
 
     def __getitem__(self, idx: int) -> dict[str, torch.Tensor | str]:
-        sample, pos, neg = self._pick(idx)
+        if self.train:
+            inner = random.choice(self.inners)
+            item_idx = random.randint(0, len(inner) - 1)
+        else:
+            inner = self.inners[0]
+            item_idx = idx
+        target_spk_id, negative_spk_ids = negative_speaker_ids_for_item(
+            inner, item_idx, self.speaker_to_id
+        )
+        sample, pos, neg = inner[item_idx]
         pos_wave = pos.sum(dim=0).float()
         neg_waves = neg.float()
         neg_valid = neg_waves.abs().flatten(1).amax(dim=1) > 1e-8
@@ -41,6 +55,8 @@ class IndividualPNDataset(Dataset):
             "neg_wave": neg_wave,
             "neg_waves": neg_waves,
             "neg_valid": neg_valid,
+            "target_spk_id": torch.tensor(target_spk_id, dtype=torch.long),
+            "negative_spk_ids": torch.tensor(negative_spk_ids, dtype=torch.long),
             "utt_id": str(idx),
         }
 
@@ -55,8 +71,13 @@ def get_dataloaders(config: dict):
     val_noise = _noise_dir(dcfg.get("val_noise", "wham_noise/cv"), has_noise)
     train_inners = [_build_inner(root, train_noise, dcfg, reproducable=False) for root in train_roots]
     val_inner = _build_inner(val_root, val_noise, dcfg, reproducable=True)
-    train_ds = IndividualPNDataset(train_inners, dcfg, dcfg.get("samples_per_epoch", 10000), True)
-    val_ds = IndividualPNDataset([val_inner], dcfg, dcfg.get("val_size", 200), False)
+    speaker_to_id = build_speaker_to_id([*train_inners, val_inner])
+    train_ds = IndividualPNDataset(
+        train_inners, dcfg, dcfg.get("samples_per_epoch", 10000), True, speaker_to_id
+    )
+    val_ds = IndividualPNDataset(
+        [val_inner], dcfg, dcfg.get("val_size", 200), False, speaker_to_id
+    )
     workers = int(tcfg.get("num_workers", 0))
     train_loader = DataLoader(
         train_ds, batch_size=int(tcfg["batch_size"]), shuffle=True, drop_last=True,

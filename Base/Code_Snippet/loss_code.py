@@ -126,7 +126,7 @@ def target_orthogonal_leakage_loss(
         interferers.shape[-1],
     )
 
-    est_targets = est_targets[..., :time_length]
+    est_targets = est_targets[..., :time_length] # 가장 짧은 길이에 맞춰 자르기
     targets = targets[..., :time_length]
     interferers = interferers[..., :time_length]
 
@@ -139,7 +139,7 @@ def target_orthogonal_leakage_loss(
     # ---------------------------------------------------------
     # 2. Local window 생성
     # ---------------------------------------------------------
-    # [B, W, L]
+    # [B, W, L] Ex : [1,45,2048] (window_size=2048, hop_size=1024, T=48000)
     est_windows = est_targets.unfold(
         dimension=-1,
         size=window_size,
@@ -152,7 +152,7 @@ def target_orthogonal_leakage_loss(
         step=hop_size,
     )
 
-    # [B, J, W, L]
+    # [B, J, W, L] (J = nuisance source (부정화자 + Noise)개수)
     interferer_windows = interferers.unfold(
         dimension=-1,
         size=window_size,
@@ -164,24 +164,24 @@ def target_orthogonal_leakage_loss(
     #
     # r = est - proj_target(est)
     # ---------------------------------------------------------
-    # [B, W, 1]
+    # [B, W, 1] 각 Window 크기 구함 (L 방향으로 제곱합) -> 정규화 위해 사용
     target_energy = target_windows.square().sum(
         dim=-1,
         keepdim=True,
     )
-
+    # [B, W, 1] 각 Window에서 est와 target의 내적 (L 방향 -> 추론 음성과 target이 유사하면 최대)
     est_target_inner = (
         est_windows * target_windows
     ).sum(
         dim=-1,
         keepdim=True,
     )
-
+    # 범위 : [0, 1] (est와 target이 유사하면 1, 직교하면 0)
     est_projection_scale = (
         est_target_inner / (target_energy + eps)
     )
 
-    # [B, W, L]
+    # [B, W, L] Broadcast하여 est에서 target 방향 제거 (GT와 다른 부분을 강조)
     residual = (
         est_windows
         - est_projection_scale * target_windows
@@ -205,13 +205,13 @@ def target_orthogonal_leakage_loss(
         dim=-1,
         keepdim=True,
     )
-
+    # 범위 : [0, 1] (nuisance와 target이 유사하면 1, 직교하면 0) 크기 : [B, J, W, 1]
     nuisance_projection_scale = (
         nuisance_target_inner
         / (target_energy_expanded + eps)
     )
 
-    # [B, J, W, L]
+    # [B, J, W, L] nuisance에서 target 방향 제거 (이유 : Target 음원에 orthogonal한 음원 성분만 leakage로 계산하기 위함)
     nuisance_orthogonal = (
         interferer_windows
         - nuisance_projection_scale * target_windows_expanded
@@ -241,12 +241,12 @@ def target_orthogonal_leakage_loss(
 
     residual_energy = residual.square().sum(dim=-1)
     residual_energy_expanded = residual_energy.unsqueeze(1)
-    normalization_energy = (
+    normalization_energy = ( # normalize_residual_energy가 True이면 residual energy를 분모 추가, residual과 nuisance의 정규화된 방향 유사도 계산한다.
         residual_energy_expanded
         if normalize_residual_energy
         else target_energy_flat
     )
-
+    # [B, J, W] 각 source/window별 leakage 계산 -> residual (est_target에 target 방향 제거)와 nuisance_orthogonal (nuisance에서 target 방향 제거) 사이의 코사인 유사도 계산
     local_leakage = residual_nuisance_inner.square() / (
         (nuisance_orthogonal_energy + eps)
         * (normalization_energy + eps)
@@ -258,17 +258,17 @@ def target_orthogonal_leakage_loss(
     # q_jw = ||b_perp||^2 / (||b||^2 + eps)
     # g_jw = 1[q_jw >= threshold]
     # ---------------------------------------------------------
-    nuisance_energy = (
+    nuisance_energy = ( # 방해화자 정규화 에너지
         interferer_windows.square().sum(dim=-1)
     )
 
-    orthogonal_ratio = (
+    orthogonal_ratio = ( # [B, J, W], 범위 [0,1]
         nuisance_orthogonal_energy
         / (nuisance_energy + eps)
     )
-
+    # nuisance가 target과 직교했을 때 q_jw가 1로 수렴 (Threshold가 0.1이라서, 너무 낮았던 Issue 존재 / Ratio 중앙값 0.9997058510780334)
     orthogonal_gate = orthogonal_ratio >= gate_threshold
-
+    # reference_energy는 sample 내부에서 가장 큰 window energy (target/nuisance 각각) Threshold 비율만큼의 window만 activity gate 통과
     target_window_energy = target_energy.squeeze(-1)
     target_reference_energy = target_window_energy.amax(dim=1, keepdim=True)
     target_active = (
@@ -299,7 +299,7 @@ def target_orthogonal_leakage_loss(
     # --------------------
     # sum_jw g_jw + eps
     # ---------------------------------------------------------
-    valid_count_per_sample = gate.sum(dim=(1, 2))
+    valid_count_per_sample = gate.sum(dim=(1, 2)) # Gate 통화 안하면 안 셈
 
     leakage_per_sample = (
         (gate * local_leakage).sum(dim=(1, 2))

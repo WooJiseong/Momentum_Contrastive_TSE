@@ -105,3 +105,7 @@ secrets.yml
 /slurm-*.out
 /depth_sweep_*.json
 /depth_sweep_*.txt
+
+#Personal notes and scratch files
+exp/
+debug/

@@ -98,6 +98,8 @@ class SoftIndivLightningModule(ResumableLightningMixin, pl.LightningModule):
         neg = batch["neg_wave"].float()
         neg_items = batch["neg_waves"].float()
         valid = batch["neg_valid"].bool()
+        target_spk_id = batch.get("target_spk_id")
+        negative_spk_ids = batch.get("negative_spk_ids")
         if train and self.config.get("augment", {}).get("noise_std", 0.0):
             std = float(self.config["augment"]["noise_std"])
             rms = pos.pow(2).mean(dim=-1, keepdim=True).sqrt().clamp_min(1e-6)
@@ -106,7 +108,14 @@ class SoftIndivLightningModule(ResumableLightningMixin, pl.LightningModule):
         with torch.no_grad():
             positive = self.model.momentum_embedding(pos, neg)
             negative = self.model.momentum_negative_embeddings(pos, neg_items, valid)
-        moco_loss, logs = self.model.loss(query, positive, negative, valid)
+        moco_loss, logs = self.model.loss(
+            query,
+            positive,
+            negative,
+            valid,
+            query_speaker_ids=target_spk_id,
+            negative_speaker_ids=negative_spk_ids,
+        )
         teacher_loss = self.model.teacher_loss(pos, neg)
         loss = moco_loss + self.model.teacher_loss_weight * teacher_loss
         if not torch.isfinite(loss):

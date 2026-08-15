@@ -200,6 +200,7 @@ class MomentumContrastivePNLearner(nn.Module):
         self.use_inbatch_positive_as_negative = bool(
             ccfg.get("use_inbatch_positive_as_negative", False)
         )
+        self.speaker_aware_queue = bool(ccfg.get("speaker_aware_queue", False))
 
         emb_dim = int(pcfg.get("emb_dim", 256))
         if self.queue_size > 0:
@@ -208,6 +209,12 @@ class MomentumContrastivePNLearner(nn.Module):
             self.queue = F.normalize(self.queue, dim=-1)
         else:
             self.register_buffer("queue", torch.empty(0, emb_dim))
+        # -1 means that the entry predates speaker-aware queue metadata. Such
+        # entries remain usable, but cannot be safely masked by speaker ID.
+        self.register_buffer(
+            "queue_speaker_ids",
+            torch.full((max(0, self.queue_size),), -1, dtype=torch.long),
+        )
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
         self.register_buffer("queue_filled", torch.zeros(1, dtype=torch.long))
 
@@ -251,9 +258,18 @@ class MomentumContrastivePNLearner(nn.Module):
         negative_keys: list[torch.Tensor],
         use_queue: bool,
         update_queue: bool,
+        query_speaker_ids: torch.Tensor | None = None,
+        negative_speaker_ids: list[torch.Tensor] | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if not negative_keys:
             raise ValueError("At least one explicit negative key is required.")
+        if self.speaker_aware_queue:
+            if query_speaker_ids is None:
+                raise ValueError("speaker_aware_queue requires query_speaker_ids.")
+            if negative_speaker_ids is None or len(negative_speaker_ids) != len(negative_keys):
+                raise ValueError(
+                    "speaker_aware_queue requires one negative_speaker_ids tensor per negative key."
+                )
 
         query = F.normalize(query, dim=-1)
         positive_key = F.normalize(positive_key.detach(), dim=-1)
@@ -261,52 +277,102 @@ class MomentumContrastivePNLearner(nn.Module):
             [concat_all_gather_no_grad(F.normalize(k, dim=-1)) for k in negative_keys],
             dim=0,
         )
+        explicit_neg_speaker_ids = None
+        if self.speaker_aware_queue:
+            explicit_neg_speaker_ids = torch.cat(
+                [
+                    concat_all_gather_no_grad(ids.to(query.device, dtype=torch.long).reshape(-1))
+                    for ids in negative_speaker_ids
+                ],
+                dim=0,
+            )
 
-        neg_bank = explicit_neg
+        neg_logit_parts = [query @ explicit_neg.t()]
         if self.use_inbatch_positive_as_negative:
             all_pos = concat_all_gather_no_grad(positive_key)
+            all_pos_speaker_ids = None
+            if self.speaker_aware_queue:
+                all_pos_speaker_ids = concat_all_gather_no_grad(
+                    query_speaker_ids.to(query.device, dtype=torch.long).reshape(-1)
+                )
             if all_pos.shape[0] > query.shape[0]:
                 rank = dist.get_rank() if dist.is_available() and dist.is_initialized() else 0
                 start = rank * query.shape[0]
                 mask = torch.ones(all_pos.shape[0], dtype=torch.bool, device=all_pos.device)
                 mask[start:start + query.shape[0]] = False
                 all_pos = all_pos[mask]
+                if all_pos_speaker_ids is not None:
+                    all_pos_speaker_ids = all_pos_speaker_ids[mask]
             else:
                 all_pos = all_pos[:0]
+                if all_pos_speaker_ids is not None:
+                    all_pos_speaker_ids = all_pos_speaker_ids[:0]
             if all_pos.numel() > 0:
-                neg_bank = torch.cat([neg_bank, all_pos], dim=0)
+                all_pos_logits = query @ all_pos.t()
+                if all_pos_speaker_ids is not None:
+                    same_speaker = query_speaker_ids.to(query.device, dtype=torch.long).reshape(-1, 1) == (
+                        all_pos_speaker_ids.to(query.device, dtype=torch.long).reshape(1, -1)
+                    )
+                    all_pos_logits = all_pos_logits.masked_fill(same_speaker, float("-inf"))
+                neg_logit_parts.append(all_pos_logits)
 
         queue_len = int(self.queue_filled.item())
+        queue_masked_ratio = query.new_tensor(0.0)
         if use_queue and queue_len > 0:
-            neg_bank = torch.cat([neg_bank, self.queue[:queue_len].detach()], dim=0)
+            queue_logits = query @ self.queue[:queue_len].detach().t()
+            if self.speaker_aware_queue:
+                query_speaker_ids = query_speaker_ids.to(query.device, dtype=torch.long).reshape(-1)
+                queue_ids = self.queue_speaker_ids[:queue_len].to(query.device, dtype=torch.long)
+                known_queue_ids = queue_ids.ge(0).unsqueeze(0)
+                same_speaker = query_speaker_ids.unsqueeze(1).eq(queue_ids.unsqueeze(0))
+                queue_mask = same_speaker & known_queue_ids
+                queue_logits = queue_logits.masked_fill(queue_mask, float("-inf"))
+                queue_masked_ratio = queue_mask.float().mean()
+            neg_logit_parts.append(queue_logits)
 
         pos_logits = torch.sum(query * positive_key, dim=-1, keepdim=True)
-        neg_logits = query @ neg_bank.t()
+        neg_logits = torch.cat(neg_logit_parts, dim=1)
         logits = torch.cat([pos_logits, neg_logits], dim=1) / self.temperature
         labels = torch.zeros(query.shape[0], dtype=torch.long, device=query.device)
         loss = F.cross_entropy(logits, labels)
 
         with torch.no_grad():
             pred = torch.argmax(logits, dim=1)
+            finite_neg = neg_logits[torch.isfinite(neg_logits)]
+            neg_sim = finite_neg.mean() if finite_neg.numel() else query.new_tensor(0.0)
+            finite_neg_by_row = torch.where(
+                torch.isfinite(neg_logits), neg_logits, neg_logits.new_tensor(-1.0e4)
+            )
             metrics = {
                 "loss": loss.detach(),
                 "acc": (pred == 0).float().mean(),
                 "pos_sim": pos_logits.mean(),
-                "neg_sim": neg_logits.mean(),
-                "neg_sim_max": neg_logits.max(dim=1).values.mean(),
+                "neg_sim": neg_sim,
+                "neg_sim_max": finite_neg_by_row.max(dim=1).values.mean(),
                 "queue_len": torch.tensor(float(queue_len), device=query.device),
+                "queue_masked_ratio": queue_masked_ratio,
             }
             if update_queue and self.queue_size > 0:
-                self._dequeue_and_enqueue(explicit_neg)
+                self._dequeue_and_enqueue(explicit_neg, explicit_neg_speaker_ids)
         return loss, metrics
 
     @torch.no_grad()
-    def _dequeue_and_enqueue(self, keys: torch.Tensor) -> None:
+    def _dequeue_and_enqueue(
+        self,
+        keys: torch.Tensor,
+        speaker_ids: torch.Tensor | None = None,
+    ) -> None:
         if self.queue_size <= 0 or keys.numel() == 0:
             return
+        if self.speaker_aware_queue:
+            if speaker_ids is None or speaker_ids.shape[0] != keys.shape[0]:
+                raise ValueError("speaker_aware_queue requires one speaker ID per queued key.")
+            speaker_ids = speaker_ids.to(keys.device, dtype=torch.long).reshape(-1)
         keys = F.normalize(keys.detach(), dim=-1)
         if keys.shape[0] >= self.queue_size:
             self.queue.copy_(keys[-self.queue_size:])
+            if speaker_ids is not None:
+                self.queue_speaker_ids.copy_(speaker_ids[-self.queue_size:])
             self.queue_ptr.zero_()
             self.queue_filled.fill_(self.queue_size)
             return
@@ -316,9 +382,14 @@ class MomentumContrastivePNLearner(nn.Module):
         end = ptr + n
         if end <= self.queue_size:
             self.queue[ptr:end].copy_(keys)
+            if speaker_ids is not None:
+                self.queue_speaker_ids[ptr:end].copy_(speaker_ids)
         else:
             first = self.queue_size - ptr
             self.queue[ptr:].copy_(keys[:first])
             self.queue[:end - self.queue_size].copy_(keys[first:])
+            if speaker_ids is not None:
+                self.queue_speaker_ids[ptr:].copy_(speaker_ids[:first])
+                self.queue_speaker_ids[:end - self.queue_size].copy_(speaker_ids[first:])
         self.queue_ptr[0] = end % self.queue_size
         self.queue_filled[0] = min(self.queue_size, int(self.queue_filled.item()) + n)

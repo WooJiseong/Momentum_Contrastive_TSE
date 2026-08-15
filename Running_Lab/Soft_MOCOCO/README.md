@@ -19,6 +19,10 @@ distance로 맞추어, contrastive 학습이 기존 decoder-compatible represent
 representation에서 천천히 벗어나도록 하는 보수적인 시작점이다. 실제 sweep에서는
 `0.0`, `0.01`, `0.1`, `1.0`을 비교하는 것을 권장한다.
 
+Stage0는 PN_MOCOCO의 speaker-aware queue를 재사용한다. Online mixer가 보존한
+`target_spk_id`를 queue embedding과 함께 저장하고, 알려진 동일 화자 항목은 false
+negative가 되지 않도록 제외한다. 이 변경은 frozen Teacher imitation term과 독립적이다.
+
 ## Run
 
 ```bash

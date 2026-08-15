@@ -17,11 +17,8 @@ The original leakage term was:
 ```text
 r = est - proj_target(est)
 b_perp = nuisance - proj_target(nuisance)
-
-L_leakage = <r, b_perp>^2
-             -----------------------------
-             ||b_perp||^2 * ||target||^2
 ```
+$$L_{\text{leakage}} = \frac{\langle r, b_{\perp} \rangle^2}{\Vert{}b_{\perp}\Vert{}^2 \Vert{} \text{target} \Vert{}^2}$$
 
 The residual energy `||r||^2` was missing from the denominator. For an
 estimate scaled by `c`, `est' = c * est`, SI-SDR is approximately unchanged,
@@ -47,7 +44,7 @@ L_leakage = <r, b_perp>^2
              -----------------------------------------
              ||b_perp||^2 * ||r||^2
 ```
-
+$$L_{\text{leakage}} = \frac{\langle r, b_{\perp} \rangle^2}{\Vert{}b_{\perp}\Vert{}^2 \Vert{} \text{r} \Vert{}^2}$$
 This is the squared cosine similarity between the target-orthogonal residual
 and target-orthogonal nuisance. Scaling `est` no longer reduces this term by
 itself. The value is bounded by approximately `[0, 1]` when the inputs are

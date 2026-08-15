@@ -105,6 +105,9 @@ class IndividualNegativeMoCo(nn.Module):
         self.temperature = float(ccfg.get("temperature", 0.1))
         self.ema_momentum = float(ccfg.get("ema_momentum", 0.997))
         self.negative_aggregation = str(ccfg.get("negative_aggregation", "mean")).lower()
+        self.speaker_aware_negative_mask = bool(
+            ccfg.get("speaker_aware_negative_mask", False)
+        )
         if self.negative_aggregation not in {"mean", "sum"}:
             raise ValueError(
                 "contrastive.negative_aggregation must be 'mean' or 'sum', "
@@ -143,7 +146,15 @@ class IndividualNegativeMoCo(nn.Module):
             out[flat_valid] = emb
         return out.view(bsz, nneg, -1)
 
-    def loss(self, query, positive, negative, valid_mask):
+    def loss(
+        self,
+        query,
+        positive,
+        negative,
+        valid_mask,
+        query_speaker_ids=None,
+        negative_speaker_ids=None,
+    ):
         query_raw = query.float()
         positive_raw = positive.detach().float()
         negative_raw = negative.detach().float()
@@ -154,6 +165,26 @@ class IndividualNegativeMoCo(nn.Module):
         positive = F.normalize(torch.nan_to_num(positive_raw), dim=-1)
         negative = F.normalize(torch.nan_to_num(negative_raw), dim=-1)
         valid_mask = valid_mask.bool() & finite_negative
+        original_valid_mask = valid_mask.clone()
+        speaker_masked_ratio = negative.new_tensor(0.0)
+        if self.speaker_aware_negative_mask:
+            if query_speaker_ids is None or negative_speaker_ids is None:
+                raise ValueError(
+                    "speaker_aware_negative_mask requires query_speaker_ids and negative_speaker_ids."
+                )
+            query_speaker_ids = query_speaker_ids.to(negative.device, dtype=torch.long).reshape(-1)
+            negative_speaker_ids = negative_speaker_ids.to(negative.device, dtype=torch.long)
+            if query_speaker_ids.shape[0] != negative.shape[0]:
+                raise ValueError("query_speaker_ids must have shape [B].")
+            if negative_speaker_ids.shape != valid_mask.shape:
+                raise ValueError(
+                    "negative_speaker_ids must have the same [B, N] shape as negative/valid_mask."
+                )
+            same_speaker = query_speaker_ids.unsqueeze(1).eq(negative_speaker_ids)
+            known_speaker = query_speaker_ids.ge(0).unsqueeze(1) & negative_speaker_ids.ge(0)
+            speaker_mask = same_speaker & known_speaker & valid_mask
+            speaker_masked_ratio = speaker_mask.float().sum() / original_valid_mask.float().sum().clamp_min(1.0)
+            valid_mask = valid_mask & ~speaker_mask
         pos_logit = (query * positive).sum(-1)
         neg_logits = torch.einsum("bd,bnd->bn", query, negative)
         pos_logit = torch.nan_to_num(pos_logit, nan=0.0, posinf=1.0, neginf=-1.0)
@@ -179,6 +210,7 @@ class IndividualNegativeMoCo(nn.Module):
                 "finite_query_ratio": finite_query.float().mean(),
                 "finite_positive_ratio": finite_positive.float().mean(),
                 "valid_negative_ratio": valid_mask.float().mean(),
+                "speaker_masked_ratio": speaker_masked_ratio,
             }
 
     @torch.no_grad()

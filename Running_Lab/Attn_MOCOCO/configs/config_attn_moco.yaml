@@ -1,8 +1,6 @@
-# PN_MOCOCO stage 0: task-aware momentum contrastive pretraining for the original PN encoder.
-
 experiment:
-  name: pn_mococo
-  date: 20260729
+  name: attn_mococo_40frame_lightweight_attention
+  date: 20260813
 
 train:
   batch_size: 2
@@ -11,18 +9,9 @@ train:
   num_workers: 4
   log_lr: true
   precision: bf16-mixed
-  log_dir: exp/moco_encoder
+  log_dir: exp/20260813_attn_mococo_40frame_lightweight_attention/stage0_moco
   log_interval: 20
-  detect_anomaly: false
   gradient_clip_val: 0.5
-  limit_train_batches: null
-  limit_val_batches: null
-
-scheduler:
-  type: CosineAnnealingLR
-  t_max: 300
-  eta_min: 1.0e-06
-  warmup_epochs: 15
 
 encoder:
   num_blocks: 3
@@ -42,10 +31,7 @@ contrastive:
   use_queue: true
   queue_size: 4096
   speaker_aware_queue: true
-  use_inbatch_positive_as_negative: false
-  use_background_negative: false
-  query_strong_aug: true
-  key_strong_aug: false
+  teacher_loss_weight: 0.1
   projection:
     in_ch: 64
     in_freq: 65
@@ -53,6 +39,10 @@ contrastive:
     emb_dim: 256
     nlayers: 3
     use_bn: false
+    pooling_size: 40
+    pooling_stride: 40
+    gate_hidden_dim: 64
+    gate_temperature: 1.0
 
 augment:
   gain_range: [0.80, 1.25]
@@ -62,6 +52,34 @@ augment:
   mask_prob_strong: 0.25
   mask_max_ratio: 0.15
   shift_max_ratio: 0.01
+
+optim:
+  optimizer: AdamW
+  lr: 1.0e-4
+  weight_decay: 0.04
+
+scheduler:
+  type: CosineAnnealingLR
+  t_max: 300
+  eta_min: 1.0e-6
+  warmup_epochs: 15
+
+checkpoint:
+  dir: exp/20260813_attn_mococo_40frame_lightweight_attention/stage0_moco/checkpoints
+  ckpt_name: attn_moco_best
+  save_best: 1
+  save_last: true
+  monitor: val_loss
+  mode: min
+  resume: null
+
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 4
+  strategy: ddp
+  find_unused_parameters: false
+  broadcast_buffers: false
 
 dataset:
   n_fft: 510
@@ -74,13 +92,11 @@ dataset:
   source_num: 3
   snr_db_range: [-3, 3]
   clean_enroll: false
-  special_spk: ["Partial_Pos", "Partial_Neg"]
+  special_spk: [Partial_Pos, Partial_Neg]
   partial_range: [0.33, 0.66]
   neg_partial_range: [1.0, 1.0]
   active_num: [-1, 1, -1]
-  train_roots:
-    - LibriSpeech/train-clean-360
-    - LibriSpeech/train-clean-100
+  train_roots: [LibriSpeech/train-clean-360, LibriSpeech/train-clean-100]
   val_root: LibriSpeech/dev-clean
   test_root: LibriSpeech/test-clean
   train_noise: wham_noise/tr
@@ -94,35 +110,4 @@ enroll:
   time: full
   v2b_use_pos_emb: true
 
-optim:
-  optimizer: AdamW
-  lr: 1.0e-04
-  weight_decay: 0.04
-
-ddp:
-  use_ddp: true
-  num_nodes: 1
-  num_gpus: 4
-  strategy: ddp
-  find_unused_parameters: false
-  broadcast_buffers: false
-
 seed: 42
-
-early_stopping:
-  enabled: false
-  monitor: val_loss
-  patience: 20
-  verbose: true
-  mode: min
-  delta: 0.0
-
-checkpoint:
-  dir: exp/moco_encoder/checkpoints
-  ckpt_name: moco_best
-  save_best: 1
-  save_last: true
-  verbose: true
-  monitor: val_loss
-  mode: min
-  resume: null

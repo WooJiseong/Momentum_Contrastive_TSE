@@ -12,7 +12,8 @@ sys.path.insert(0, str(pn_mococo))
 sys.path.insert(0, str(project_dir))
 
 base_spec = importlib.util.spec_from_file_location(
-    "pn_mococo_base_train_moco_encoder", pn_mococo / "train_moco_encoder.py"
+    "pn_mococo_base_train_attn_moco_encoder",
+    pn_mococo / "train_moco_encoder.py",
 )
 if base_spec is None or base_spec.loader is None:
     raise ImportError(f"Cannot load PN_MOCOCO trainer from {pn_mococo / 'train_moco_encoder.py'}")
@@ -20,14 +21,19 @@ base_train = importlib.util.module_from_spec(base_spec)
 sys.modules[base_spec.name] = base_train
 base_spec.loader.exec_module(base_train)
 
-from pn_soft_mococo.soft_moco import SoftMomentumContrastivePNLearner
-from pn_soft_mococo.paths import normalize_training_paths
+from pn_attn_mococo.attn_moco import AttnSoftMomentumContrastivePNLearner
+from pn_attn_mococo.paths import normalize_training_paths
 
 
-class SoftLightningModule(base_train.LightningModule):
+class AttnLightningModule(base_train.LightningModule):
     def __init__(self, config: dict):
-        super().__init__(config)
-        self.learner = SoftMomentumContrastivePNLearner(config)
+        # Initialize Lightning directly so the original Trainer does not
+        # construct a second Projection Head with unsupported attention keys.
+        base_train.pl.LightningModule.__init__(self)
+        self.config = config
+        self.save_hyperparameters(config)
+        self.learner = AttnSoftMomentumContrastivePNLearner(config)
+        self._last_train_bsz = 1
 
     def _shared_step(self, batch: dict, train: bool):
         (
@@ -54,11 +60,10 @@ class SoftLightningModule(base_train.LightningModule):
         teacher_loss = self.learner.teacher_loss(q_pos, q_neg)
         total = moco_loss + self.learner.teacher_loss_weight * teacher_loss
         logs["teacher_loss"] = teacher_loss.detach()
-        logs["total_loss"] = total.detach()
         return total, logs
 
     def training_step(self, batch, batch_idx):
-        loss, logs = self._shared_step(batch, train=True)
+        loss, logs = self._shared_step(batch, True)
         bsz = int(batch["pos_wave"].shape[0])
         self.log("train_loss", loss, on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log("train_moco_loss", logs["loss"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
@@ -68,7 +73,7 @@ class SoftLightningModule(base_train.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, logs = self._shared_step(batch, train=False)
+        loss, logs = self._shared_step(batch, False)
         bsz = int(batch["pos_wave"].shape[0])
         self.log("val_loss", loss, on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log("val_moco_loss", logs["loss"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
@@ -77,6 +82,22 @@ class SoftLightningModule(base_train.LightningModule):
         return loss
 
 
-base_train.LightningModule = SoftLightningModule
+class PeriodicAttnExportCallback(base_train.ExportPNEncoderCallback):
+    """Keep best/last exports and a checkpoint every 50 completed epochs."""
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        super().on_validation_epoch_end(trainer, pl_module)
+        if not trainer.is_global_zero:
+            return
+        completed_epoch = int(trainer.current_epoch) + 1
+        if completed_epoch % 50 == 0:
+            self._export(
+                pl_module,
+                self.export_dir / f"pn_encoder_{completed_epoch}ep.pt",
+            )
+
+
+base_train.LightningModule = AttnLightningModule
+base_train.ExportPNEncoderCallback = PeriodicAttnExportCallback
 base_train.normalize_paths = normalize_training_paths
 base_train.main()

@@ -25,6 +25,7 @@ contrastive:
   temperature: 0.10
   ema_momentum: 0.997
   encoder_lr_scale: 0.03
+  speaker_aware_negative_mask: true
   projection:
     in_ch: 64
     in_freq: 65

@@ -47,6 +47,7 @@ def main() -> None:
     merge(config, override)
     resolve_paths(config)
     stage_dir = Path(config["train"]["log_dir"])
+    stage_dir.mkdir(parents=True, exist_ok=True)
     resolved = stage_dir / "config_tfgridnet_resolved.yaml"
     resolved.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
     sys.argv = ["train_tfgridnet_soft_indiv.py", "--config", str(resolved)]

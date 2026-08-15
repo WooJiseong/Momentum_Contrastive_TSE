@@ -19,7 +19,7 @@ from pn_mococo.paths import add_repo_paths, project_path
 
 add_repo_paths()
 
-from data.datasets import get_dataloaders
+from pn_mococo.speaker_data import get_speaker_aware_dataloaders as get_dataloaders
 from pn_mococo.moco_encoder import MomentumContrastivePNLearner, ensure_channel
 
 
@@ -126,6 +126,7 @@ class MetricPrinterCallback(Callback):
             "train_pos_sim",
             "train_neg_sim_max",
             "train_queue_len",
+            "train_queue_masked_ratio",
             "train_ema_m",
         ):
             val = metrics.get(key)
@@ -151,6 +152,15 @@ class LightningModule(pl.LightningModule):
         self.save_hyperparameters(config)
         self.learner = MomentumContrastivePNLearner(config)
         self._last_train_bsz = 1
+
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
+        """Make checkpoints created before speaker-aware queue metadata resumable."""
+        state_dict = checkpoint.setdefault("state_dict", {})
+        key = "learner.queue_speaker_ids"
+        expected = self.learner.queue_speaker_ids.detach().cpu()
+        saved = state_dict.get(key)
+        if saved is None or tuple(saved.shape) != tuple(expected.shape):
+            state_dict[key] = expected.clone()
 
     def _augment_wave(self, x: torch.Tensor, strong: bool) -> torch.Tensor:
         acfg = self.config.get("augment", {}) or {}
@@ -222,10 +232,35 @@ class LightningModule(pl.LightningModule):
             self.learner.momentum_embedding(p, n)
             for p, n in zip(negative_pos, negative_neg)
         ]
-        return q_pos, q_neg, pos_key, neg_key, negative_pairs
+        target_spk_id = None
+        negative_speaker_ids = None
+        if bool(ccfg.get("speaker_aware_queue", False)):
+            if "target_spk_id" not in batch:
+                raise KeyError(
+                    "speaker_aware_queue is enabled but the batch has no target_spk_id."
+                )
+            target_spk_id = batch["target_spk_id"].long().reshape(-1)
+            negative_speaker_ids = [target_spk_id for _ in negative_pairs]
+        return (
+            q_pos,
+            q_neg,
+            pos_key,
+            neg_key,
+            negative_pairs,
+            target_spk_id,
+            negative_speaker_ids,
+        )
 
     def _shared_step(self, batch: dict, train: bool):
-        q_pos, q_neg, pos_key, neg_key, negative_keys = self._pairs(batch, train=train)
+        (
+            q_pos,
+            q_neg,
+            pos_key,
+            neg_key,
+            negative_keys,
+            target_spk_id,
+            negative_speaker_ids,
+        ) = self._pairs(batch, train=train)
         query = self.learner.student_embedding(q_pos, q_neg)
         with torch.no_grad():
             positive = self.learner.momentum_embedding(pos_key, neg_key)
@@ -235,6 +270,8 @@ class LightningModule(pl.LightningModule):
             negative_keys=negative_keys,
             use_queue=train and bool(self.config.get("contrastive", {}).get("use_queue", True)),
             update_queue=train,
+            query_speaker_ids=target_spk_id,
+            negative_speaker_ids=negative_speaker_ids,
         )
 
     def training_step(self, batch, batch_idx):
@@ -247,6 +284,7 @@ class LightningModule(pl.LightningModule):
         self.log("train_neg_sim", logs["neg_sim"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log("train_neg_sim_max", logs["neg_sim_max"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log("train_queue_len", logs["queue_len"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
+        self.log("train_queue_masked_ratio", logs["queue_masked_ratio"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         return loss
 
     def validation_step(self, batch, batch_idx):

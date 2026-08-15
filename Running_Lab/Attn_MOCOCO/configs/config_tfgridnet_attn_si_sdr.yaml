@@ -1,0 +1,25 @@
+base_config: ../PN_MOCOCO/configs/config_tfgridnet_supervised.yaml
+experiment:
+  name: attn_mococo_stage1_si_sdr
+  date: 20260813
+train:
+  num_epochs: 200
+  log_dir: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr
+checkpoint:
+  dir: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr/checkpoints
+  ckpt_name: tfgridnet_si_sdr_best
+  resume: null
+paths:
+  initial_model_ckpt: ../../../checkpoints/proposed-monaural.pt
+  encoder_override_ckpt: exp/20260813_attn_mococo_40frame_lightweight_attention/stage0_moco/checkpoints/pn_encoder_best.pt
+  strict_initial_model: true
+  strict_encoder_override: true
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+loss:
+  type: si_sdr
+eval:
+  checkpoint: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr/checkpoints/tfgridnet_si_sdr_best.ckpt
+  out_json: exp/20260813_attn_mococo_40frame_lightweight_attention/evaluation/si_sdr_results.json

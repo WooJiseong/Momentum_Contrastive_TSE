@@ -30,6 +30,7 @@ contrastive:
   ema_momentum_final: 1.0
   use_queue: true
   queue_size: 4096
+  speaker_aware_queue: true
   teacher_loss_weight: 0.1
   projection:
     in_ch: 64

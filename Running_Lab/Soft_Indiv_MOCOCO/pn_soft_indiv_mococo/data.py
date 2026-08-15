@@ -10,13 +10,15 @@ from pn_soft_indiv_mococo.paths import add_repo_paths
 add_repo_paths()
 
 from data.datasets import _build_inner, _noise_dir, _worker_init
+from pn_indiv_mococo.speaker_ids import build_speaker_to_id, negative_speaker_ids_for_item
 
 
 class _OnlineMixerDataset(Dataset):
-    def __init__(self, inners, length: int, train: bool):
+    def __init__(self, inners, length: int, train: bool, speaker_to_id: dict[str, int] | None = None):
         self.inners = list(inners)
         self.length = int(length)
         self.train = bool(train)
+        self.speaker_to_id = speaker_to_id or build_speaker_to_id(self.inners)
 
     def __len__(self) -> int:
         return self.length
@@ -40,13 +42,24 @@ class SoftIndividualStage0Dataset(_OnlineMixerDataset):
     """Preserve each negative enrollment waveform for individual-negative MoCo."""
 
     def __getitem__(self, idx: int) -> dict:
-        _, pos, neg = self._pick(idx)
+        if self.train:
+            inner = random.choice(self.inners)
+            item_idx = random.randint(0, len(inner) - 1)
+        else:
+            inner = self.inners[0]
+            item_idx = idx
+        target_spk_id, negative_spk_ids = negative_speaker_ids_for_item(
+            inner, item_idx, self.speaker_to_id
+        )
+        _, pos, neg = inner[item_idx]
         pos_wave, neg_wave, neg_waves, neg_valid = self._enrollment(pos, neg)
         return {
             "pos_wave": pos_wave,
             "neg_wave": neg_wave,
             "neg_waves": neg_waves,
             "neg_valid": neg_valid,
+            "target_spk_id": torch.tensor(target_spk_id, dtype=torch.long),
+            "negative_spk_ids": torch.tensor(negative_spk_ids, dtype=torch.long),
             "utt_id": str(idx),
         }
 
@@ -91,8 +104,19 @@ def _dataloaders(config: dict, dataset_type: type[_OnlineMixerDataset]):
     dcfg = config["dataset"]
     tcfg = config["train"]
     train_inners, val_inner = _inners(config)
-    train_ds = dataset_type(train_inners, int(dcfg.get("samples_per_epoch", 10000)), train=True)
-    val_ds = dataset_type([val_inner], int(dcfg.get("val_size", 200)), train=False)
+    speaker_to_id = build_speaker_to_id([*train_inners, val_inner])
+    train_ds = dataset_type(
+        train_inners,
+        int(dcfg.get("samples_per_epoch", 10000)),
+        train=True,
+        speaker_to_id=speaker_to_id,
+    )
+    val_ds = dataset_type(
+        [val_inner],
+        int(dcfg.get("val_size", 200)),
+        train=False,
+        speaker_to_id=speaker_to_id,
+    )
     workers = int(tcfg.get("num_workers", 0))
     train_loader = DataLoader(
         train_ds,

@@ -30,17 +30,26 @@ class SoftLightningModule(base_train.LightningModule):
         self.learner = SoftMomentumContrastivePNLearner(config)
 
     def _shared_step(self, batch: dict, train: bool):
-        q_pos, q_neg, pos_key, neg_key, _ = self._pairs(batch, train=train)
+        (
+            q_pos,
+            q_neg,
+            pos_key,
+            neg_key,
+            negative_keys,
+            target_spk_id,
+            negative_speaker_ids,
+        ) = self._pairs(batch, train=train)
         query = self.learner.student_embedding(q_pos, q_neg)
         with torch.no_grad():
             positive = self.learner.momentum_embedding(pos_key, neg_key)
-            negative = [self.learner.momentum_embedding(neg_key, pos_key)]
         moco_loss, logs = self.learner.contrastive_loss(
             query=query,
             positive_key=positive,
-            negative_keys=negative,
+            negative_keys=negative_keys,
             use_queue=train and bool(self.config.get("contrastive", {}).get("use_queue", True)),
             update_queue=train,
+            query_speaker_ids=target_spk_id,
+            negative_speaker_ids=negative_speaker_ids,
         )
         teacher_loss = self.learner.teacher_loss(q_pos, q_neg)
         total = moco_loss + self.learner.teacher_loss_weight * teacher_loss
@@ -54,6 +63,7 @@ class SoftLightningModule(base_train.LightningModule):
         self.log("train_moco_loss", logs["loss"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log("train_teacher_loss", logs["teacher_loss"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log("train_pos_sim", logs["pos_sim"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
+        self.log("train_queue_masked_ratio", logs["queue_masked_ratio"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         return loss
 
     def validation_step(self, batch, batch_idx):

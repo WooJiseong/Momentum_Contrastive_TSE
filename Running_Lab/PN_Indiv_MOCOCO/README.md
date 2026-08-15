@@ -19,6 +19,12 @@ L = CE([positive_similarity, logmeanexp(negative_similarities)])
 따라서 negative speaker 수가 늘어도 negative 항의 총 weight가 증가하지 않는다.
 WHAM noise row도 별도의 negative item으로 취급한다.
 
+현재 Stage0는 `target_spk_id`와 각 `negative_spk_ids`를 보존한다. 만약 데이터상
+negative row가 target과 같은 화자로 표시되면 해당 row만 loss denominator에서
+제외한다. 화자를 알 수 없는 WHAM/padding row는 `-1`로 두고 마스킹하지 않는다.
+실제 제거 비율은 TensorBoard의 `train_speaker_masked_ratio`와
+`val_speaker_masked_ratio`에서 확인할 수 있다.
+
 Stage1 TFGridNet은 기존 PN_MOCOCO supervised trainer 조건을 유지하되,
 `Base/Code_Snippet/loss_code.py`의 `target_orthogonal_leakage_loss`를
 SI-SDR loss에 더해 target-orthogonal leakage를 줄인다.
