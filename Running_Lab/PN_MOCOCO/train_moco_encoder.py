@@ -26,6 +26,11 @@ from pn_mococo.moco_encoder import MomentumContrastivePNLearner, ensure_channel
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train PN_MOCOCO momentum contrastive PN encoder.")
     parser.add_argument("--config", default="configs/config_moco_encoder.yaml")
+    parser.add_argument(
+        "--resume",
+        default=None,
+        help="Resume from a Lightning checkpoint, including optimizer state.",
+    )
     return parser.parse_args()
 
 
@@ -372,6 +377,11 @@ class DataModule(pl.LightningDataModule):
 def main() -> None:
     args = parse_args()
     config = parse_config(args.config)
+    if args.resume:
+        resume_path = Path(args.resume).expanduser().resolve()
+        if not resume_path.is_file():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+        config.setdefault("checkpoint", {})["resume"] = str(resume_path)
     pl.seed_everything(int(config.get("seed", 42)))
     torch.set_float32_matmul_precision("medium")
 

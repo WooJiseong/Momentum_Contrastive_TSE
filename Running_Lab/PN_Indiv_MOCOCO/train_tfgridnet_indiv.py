@@ -21,7 +21,10 @@ base_train = importlib.util.module_from_spec(base_spec)
 sys.modules[base_spec.name] = base_train
 base_spec.loader.exec_module(base_train)
 
-from pn_indiv_mococo.losses import target_orthogonal_leakage_loss
+from pn_indiv_mococo.losses import (
+    build_target_orthogonal_leakage_kwargs,
+    target_orthogonal_leakage_loss,
+)
 from pn_indiv_mococo.stage1_data import get_stage1_dataloaders
 from pn_mococo.tfgridnet_model import neg_si_sdr_loss, separation_metrics
 
@@ -33,14 +36,8 @@ class PNIndivStage1LightningModule(base_train.LightningModule):
         super().__init__(config)
         loss_cfg = config.get("loss", {})
         self.orthogonal_weight = float(loss_cfg.get("orthogonal_leakage_weight", 0.1))
-        self.orthogonal_window = int(loss_cfg.get("orthogonal_window_size", 2048))
-        self.orthogonal_hop = int(loss_cfg.get("orthogonal_hop_size", 1024))
-        self.orthogonal_gate = float(loss_cfg.get("orthogonal_gate_threshold", 0.1))
-        self.orthogonal_eps = float(loss_cfg.get("orthogonal_eps", 1e-8))
-        self.normalize_residual_energy = bool(loss_cfg.get("normalize_residual_energy", True))
-        self.activity_gate = bool(loss_cfg.get("activity_gate", True))
-        self.target_activity_threshold = float(loss_cfg.get("target_activity_threshold", 0.01))
-        self.nuisance_activity_threshold = float(loss_cfg.get("nuisance_activity_threshold", 0.01))
+        self.leakage_loss_kwargs = build_target_orthogonal_leakage_kwargs(loss_cfg)
+        self.gate_mode = str(self.leakage_loss_kwargs["gate_mode"]).lower().strip()
         self.verify_nuisance_contract = bool(loss_cfg.get("verify_nuisance_contract", True))
         self.fail_on_nonfinite = bool(loss_cfg.get("fail_on_nonfinite", True))
         self._nuisance_contract_checked = False
@@ -87,14 +84,7 @@ class PNIndivStage1LightningModule(base_train.LightningModule):
             est,
             target,
             interferers,
-            window_size=self.orthogonal_window,
-            hop_size=self.orthogonal_hop,
-            gate_threshold=self.orthogonal_gate,
-            eps=self.orthogonal_eps,
-            normalize_residual_energy=self.normalize_residual_energy,
-            activity_gate=self.activity_gate,
-            target_activity_threshold=self.target_activity_threshold,
-            nuisance_activity_threshold=self.nuisance_activity_threshold,
+            **self.leakage_loss_kwargs,
             return_stats=True,
         )
         loss = si_sdr_loss + self.orthogonal_weight * leakage_loss
@@ -105,7 +95,12 @@ class PNIndivStage1LightningModule(base_train.LightningModule):
                 f"leakage={float(leakage_loss.detach()):.6g}"
             )
 
-        metrics = separation_metrics(est.detach() if train else est, target, mixture)
+        metrics = separation_metrics(
+            est.detach() if train else est,
+            target,
+            mixture,
+            reference=not train,
+        )
         prefix = "train" if train else "val"
         bsz = int(target.shape[0])
         self.log(f"{prefix}_loss", loss, on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
@@ -116,6 +111,9 @@ class PNIndivStage1LightningModule(base_train.LightningModule):
         self.log(f"{prefix}_orthogonal_ratio", stats["orthogonal_ratio"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log(f"{prefix}_orthogonal_target_activity_ratio", stats["target_activity_ratio"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log(f"{prefix}_orthogonal_nuisance_activity_ratio", stats["nuisance_activity_ratio"], on_step=False, on_epoch=True, batch_size=bsz)
+        if self.gate_mode == "stft_magnitude_overlap":
+            self.log(f"{prefix}_stft_magnitude_overlap", stats["stft_magnitude_overlap"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
+            self.log(f"{prefix}_stft_magnitude_gate_ratio", stats["stft_magnitude_gate_ratio"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log(f"{prefix}_nuisance_count", float(interferers.shape[1]), on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         self.log(f"{prefix}_nuisance_reconstruction_mae", reconstruction_mae, on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         for key, value in metrics.items():

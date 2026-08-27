@@ -11,8 +11,6 @@ os.makedirs(os.environ["NUMBA_CACHE_DIR"], exist_ok=True)
 import yaml
 import torch
 from torch.utils.data import DataLoader
-from torchmetrics.functional import scale_invariant_signal_distortion_ratio as _si_sdr
-from torchmetrics.functional import signal_noise_ratio as _snr
 from tqdm import tqdm
 
 from pn_mococo.paths import add_repo_paths, project_path
@@ -22,6 +20,7 @@ add_repo_paths()
 from data.datasets import build_test_dataset
 from pn_mococo.moco_encoder import ensure_channel
 from pn_mococo.tfgridnet_model import build_model_from_config, causal_forward
+from Base.Code_Snippet.metrics_code import align_output_polarity, reference_metric_batch
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,13 +60,6 @@ def load_eval_checkpoint(model: torch.nn.Module, path: str) -> None:
         raise RuntimeError(f"Eval checkpoint mismatch: missing={missing}, unexpected={unexpected}")
 
 
-def maybe_fix_sign(est: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    pos_err = (est - target).pow(2).mean(dim=-1)
-    neg_err = (-est - target).pow(2).mean(dim=-1)
-    sign = torch.where(neg_err < pos_err, -1.0, 1.0).to(est.device)
-    return est * sign[:, None]
-
-
 def write_result_summary(result: dict, out_json: str | None, config: dict) -> None:
     if not out_json:
         return
@@ -95,6 +87,10 @@ def write_result_summary(result: dict, out_json: str | None, config: dict) -> No
         "",
         f"- SI-SDR: {summary.get('si_sdr'):.6f}",
         f"- SI-SDRi: {summary.get('si_sdri'):.6f}",
+        f"- SDR (Base): {summary.get('sdr'):.6f}",
+        f"- SDRi (Base): {summary.get('sdri'):.6f}",
+        f"- SI-SNR: {summary.get('si_snr'):.6f}",
+        f"- SI-SNRi: {summary.get('si_snri'):.6f}",
         f"- SNR: {summary.get('snr'):.6f}",
         f"- SNRi: {summary.get('snri'):.6f}",
         "",
@@ -152,7 +148,8 @@ def main() -> None:
     chunk_samples = int(config.get("inference", {}).get("chunk_samples", config["dataset"]["sample_rate"]))
     sign_correction = bool(config.get("eval", {}).get("sign_correction", True))
 
-    totals = {"si_sdr": 0.0, "si_sdri": 0.0, "snr": 0.0, "snri": 0.0}
+    metric_keys = ("si_sdr", "si_sdri", "sdr", "sdri", "si_snr", "si_snri", "snr", "snri")
+    totals = {key: 0.0 for key in metric_keys}
     count = 0
     rows = []
 
@@ -163,20 +160,14 @@ def main() -> None:
         neg = ensure_channel(batch["neg_wave"]).to(device)
         est = causal_forward(model, mixture, pos, neg, chunk_samples)
         if sign_correction:
-            est = maybe_fix_sign(est, target)
+            est, _ = align_output_polarity(est, target)
         mix_wave = mixture.squeeze(1)
-        si = _si_sdr(est.float(), target.float(), zero_mean=True)
-        si_in = _si_sdr(mix_wave.float(), target.float(), zero_mean=True)
-        snr_out = _snr(est.float(), target.float())
-        snr_in = _snr(mix_wave.float(), target.float())
-        metrics = {
-            "si_sdr": si,
-            "si_sdri": si - si_in,
-            "snr": snr_out,
-            "snri": snr_out - snr_in,
-        }
+        metrics, _, _ = reference_metric_batch(
+            est, target, mix_wave, sign_correction=False
+        )
         bsz = int(target.shape[0])
-        for key, value in metrics.items():
+        for key in metric_keys:
+            value = metrics[key]
             totals[key] += float(value.detach().sum().cpu())
         count += bsz
         utt_ids = batch.get("utt_id", [""] * bsz)
@@ -185,6 +176,10 @@ def main() -> None:
                 "utt_id": str(utt_ids[i]),
                 "si_sdr": float(metrics["si_sdr"][i].detach().cpu()),
                 "si_sdri": float(metrics["si_sdri"][i].detach().cpu()),
+                "sdr": float(metrics["sdr"][i].detach().cpu()),
+                "sdri": float(metrics["sdri"][i].detach().cpu()),
+                "si_snr": float(metrics["si_snr"][i].detach().cpu()),
+                "si_snri": float(metrics["si_snri"][i].detach().cpu()),
                 "snr": float(metrics["snr"][i].detach().cpu()),
                 "snri": float(metrics["snri"][i].detach().cpu()),
             })

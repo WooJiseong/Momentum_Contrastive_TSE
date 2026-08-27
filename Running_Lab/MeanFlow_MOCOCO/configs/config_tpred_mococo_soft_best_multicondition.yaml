@@ -1,0 +1,103 @@
+# Soft_MOCOCO Best Stage0 t-predictor aligned with the four-condition evaluator.
+
+train:
+  batch_size: 32
+  num_epochs: 80
+  accumulation_steps: 2
+  num_workers: 4
+  log_lr: true
+  precision: bf16-mixed
+  log_dir: exp/20260826_soft_best_tpred_multicondition/logs
+  log_interval: 50
+  detect_anomaly: false
+  gradient_clip_val: 0.5
+  limit_train_batches: null
+  limit_val_batches: null
+  spectral_aug: false
+
+scheduler:
+  type: CosineAnnealingLR
+  t_max: 80
+  eta_min: 1.0e-5
+  warmup_epochs: 8
+
+model:
+  C: 1024
+
+dataset:
+  n_fft: 510
+  win_length: 510
+  hop_length: 128
+  sample_rate: 16000
+  segment: 6
+  segment_aux: 3
+  stft_scale: 1.0
+  source_num: 3
+  conditions: [[2, 2], [2, 3], [3, 2], [3, 3]]
+  snr_db_range: [-2.5, 2.5]
+  clean_enroll: false
+  special_spk: [Partial_Pos, Partial_Neg]
+  partial_range: [0.33, 0.66]
+  neg_partial_range: [0.33, 1.0]
+  active_num: [-1, 1, -1]
+  enroll_exclude_mixture_utt: false
+  train_roots:
+    - /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/train-clean-360
+    - /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/train-clean-100
+  val_root: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/dev-clean
+  test_root: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/test-clean
+  train_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/tr
+  val_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/cv
+  test_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/tt
+  samples_per_epoch: 30000
+  val_size: 500
+
+data_mix:
+  synthetic_probability: 0.25
+
+loss:
+  mse_weight: 1.0
+  smooth_l1_weight: 0.25
+  huber_beta: 0.05
+  bias_weight: 0.10
+  correlation_weight: 0.05
+
+enroll:
+  provider: v2b_pn_encoder
+  time: full
+  v2b_use_pos_emb: true
+
+paths:
+  pn_ckpt: null
+
+optim:
+  optimizer: AdamW
+  lr: 5.0e-4
+  weight_decay: 1.0e-5
+
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 4
+  strategy: ddp
+
+seed: 42
+
+early_stopping:
+  enabled: true
+  monitor: val_mae
+  patience: 25
+  verbose: true
+  mode: min
+  delta: 0.0
+
+checkpoint:
+  dir: exp/20260826_soft_best_tpred_multicondition/checkpoints
+  ckpt_name: tpred_soft_best_multicondition
+  save_best: true
+  save_last: true
+  verbose: true
+  monitor: val_mae
+  mode: min
+  load_weights_only: false
+  resume: null

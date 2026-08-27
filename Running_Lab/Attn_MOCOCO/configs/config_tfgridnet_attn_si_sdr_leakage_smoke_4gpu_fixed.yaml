@@ -1,0 +1,60 @@
+# DDP-safe smoke test: at least one complete optimizer step per rank and no
+# gradient accumulation remainder at the end of a truncated epoch.
+base_config: ../PN_MOCOCO/configs/config_tfgridnet_supervised.yaml
+
+experiment:
+  name: attn_mococo_stage1_si_sdr_plus_leakage_smoke_4gpu_fixed
+  date: 20260824
+
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 4
+  strategy: ddp
+  find_unused_parameters: false
+  broadcast_buffers: false
+
+train:
+  batch_size: 2
+  num_epochs: 1
+  accumulation_steps: 1
+  num_workers: 0
+  log_interval: 1
+  limit_train_batches: 2
+  limit_val_batches: 2
+  log_dir: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr_leakage_smoke_4gpu_fixed
+
+checkpoint:
+  dir: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr_leakage_smoke_4gpu_fixed/checkpoints
+  ckpt_name: tfgridnet_si_sdr_leakage_smoke_4gpu_fixed
+  resume: null
+
+paths:
+  initial_model_ckpt: ../../../checkpoints/proposed-monaural.pt
+  encoder_override_ckpt: exp/20260813_attn_mococo_40frame_lightweight_attention/stage0_moco/checkpoints/pn_encoder_best.pt
+  strict_initial_model: true
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+eval:
+  checkpoint: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr_leakage_smoke_4gpu_fixed/checkpoints/tfgridnet_si_sdr_leakage_smoke_4gpu_fixed_best.ckpt
+  out_json: exp/20260813_attn_mococo_40frame_lightweight_attention/evaluation/si_sdr_leakage_smoke_4gpu_fixed_results.json
+
+loss:
+  type: si_sdr_plus_target_orthogonal_leakage
+  orthogonal_leakage_weight: 0.1
+  orthogonal_window_size: 2048
+  orthogonal_hop_size: 1024
+  orthogonal_gate_threshold: 0.1
+  orthogonal_eps: 1.0e-8
+  normalize_residual_energy: true
+  activity_gate: true
+  target_activity_threshold: 0.01
+  nuisance_activity_threshold: 0.01
+  verify_nuisance_contract: true
+  fail_on_nonfinite: true
+

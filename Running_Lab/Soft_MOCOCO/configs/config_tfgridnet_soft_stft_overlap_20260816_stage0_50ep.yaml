@@ -1,0 +1,60 @@
+base_config: ../PN_MOCOCO/configs/config_tfgridnet_supervised.yaml
+
+experiment:
+  name: stage0_50ep_soft_stft_overlap_gate
+  date: 20260816
+
+train:
+  num_epochs: 200
+  log_dir: exp/20260816_stage0_50ep_soft_stft_overlap_gate/stage1_tfgridnet
+
+checkpoint:
+  dir: exp/20260816_stage0_50ep_soft_stft_overlap_gate/stage1_tfgridnet/checkpoints
+  ckpt_name: tfgridnet_best
+
+paths:
+  initial_model_ckpt: ../../../checkpoints/proposed-monaural.pt
+  encoder_override_ckpt: exp/20260803_stage0_50ep_soft_wo_leakage_test/stage0_moco/checkpoints/pn_encoder_50ep.pt
+  strict_initial_model: true
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+loss:
+  type: si_sdr_plus_target_orthogonal_leakage
+  orthogonal_leakage_weight: 0.1
+  orthogonal_window_size: 2048
+  orthogonal_hop_size: 1024
+  gate_mode: stft_magnitude_overlap
+  stft_n_fft: 510
+  stft_hop_length: 128
+  stft_win_length: 510
+  stft_center: false
+  stft_magnitude_overlap_threshold: 0.85
+  orthogonal_eps: 1.0e-8
+  normalize_residual_energy: true
+  activity_gate: true
+  target_activity_threshold: 0.01
+  nuisance_activity_threshold: 0.01
+  verify_nuisance_contract: true
+  fail_on_nonfinite: true
+
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 3
+  strategy: ddp
+  find_unused_parameters: false
+  broadcast_buffers: false
+
+eval:
+  checkpoint: exp/20260816_stage0_50ep_soft_stft_overlap_gate/stage1_tfgridnet/checkpoints/tfgridnet_best.ckpt
+  out_json: exp/20260816_stage0_50ep_soft_stft_overlap_gate/evaluation/results.json
+  mode: fixed_count
+  test_n: 5000
+  batch_size: 4
+  num_workers: 2
+  sign_correction: true

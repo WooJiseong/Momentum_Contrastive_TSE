@@ -1,7 +1,90 @@
-from typing import Dict, Tuple, Union
+from typing import Dict, Mapping, Tuple, Union
 
 import torch
 from torch import Tensor
+
+
+def build_target_orthogonal_leakage_kwargs(
+    loss_cfg: Mapping[str, object],
+) -> Dict[str, object]:
+    """Translate YAML loss options into shared loss-call arguments."""
+    return {
+        "window_size": int(loss_cfg.get("orthogonal_window_size", 2048)),
+        "hop_size": int(loss_cfg.get("orthogonal_hop_size", 1024)),
+        "gate_threshold": float(loss_cfg.get("orthogonal_gate_threshold", 0.1)),
+        "eps": float(loss_cfg.get("orthogonal_eps", 1e-8)),
+        "normalize_residual_energy": bool(
+            loss_cfg.get("normalize_residual_energy", True)
+        ),
+        "activity_gate": bool(loss_cfg.get("activity_gate", True)),
+        "target_activity_threshold": float(
+            loss_cfg.get("target_activity_threshold", 0.01)
+        ),
+        "nuisance_activity_threshold": float(
+            loss_cfg.get("nuisance_activity_threshold", 0.01)
+        ),
+        "gate_mode": str(loss_cfg.get("gate_mode", "waveform_orthogonal")),
+        "stft_n_fft": int(loss_cfg.get("stft_n_fft", 510)),
+        "stft_hop_length": int(loss_cfg.get("stft_hop_length", 128)),
+        "stft_win_length": int(loss_cfg.get("stft_win_length", 510)),
+        "stft_center": bool(loss_cfg.get("stft_center", False)),
+        "stft_magnitude_overlap_threshold": float(
+            loss_cfg.get("stft_magnitude_overlap_threshold", 0.85)
+        ),
+    }
+
+
+def _stft_magnitude_overlap(
+    target_windows: Tensor,
+    interferer_windows: Tensor,
+    n_fft: int,
+    hop_length: int,
+    win_length: int,
+    center: bool,
+    eps: float,
+) -> Tensor:
+    """Return [B, J, W] cosine overlap of STFT magnitudes."""
+    batch_size, window_count, window_samples = target_windows.shape
+    source_count = interferer_windows.shape[1]
+    if not 1 <= win_length <= n_fft <= window_samples:
+        raise ValueError(
+            "STFT requires 1 <= win_length <= n_fft <= waveform window size; "
+            f"got win_length={win_length}, n_fft={n_fft}, window={window_samples}"
+        )
+    if hop_length <= 0:
+        raise ValueError("stft_hop_length must be positive")
+
+    stft_window = torch.hann_window(
+        win_length, device=target_windows.device, dtype=target_windows.dtype
+    )
+    target_mag = torch.stft(
+        target_windows.reshape(batch_size * window_count, window_samples),
+        n_fft=n_fft,
+        hop_length=hop_length,
+        win_length=win_length,
+        window=stft_window,
+        center=center,
+        return_complex=True,
+    ).abs()
+    nuisance_mag = torch.stft(
+        interferer_windows.reshape(batch_size * source_count * window_count, window_samples),
+        n_fft=n_fft,
+        hop_length=hop_length,
+        win_length=win_length,
+        window=stft_window,
+        center=center,
+        return_complex=True,
+    ).abs()
+
+    target_vec = target_mag.reshape(batch_size, window_count, -1)
+    nuisance_vec = nuisance_mag.reshape(batch_size, source_count, window_count, -1)
+    target_norm = target_vec.square().sum(dim=-1).sqrt().unsqueeze(1)
+    nuisance_norm = nuisance_vec.square().sum(dim=-1).sqrt()
+    overlap = (
+        (nuisance_vec * target_vec.unsqueeze(1)).sum(dim=-1)
+        / (nuisance_norm * target_norm + eps)
+    )
+    return overlap.clamp(0.0, 1.0)
 
 
 def target_orthogonal_leakage_loss(
@@ -16,6 +99,12 @@ def target_orthogonal_leakage_loss(
     activity_gate: bool = True,
     target_activity_threshold: float = 0.01,
     nuisance_activity_threshold: float = 0.01,
+    gate_mode: str = "waveform_orthogonal",
+    stft_n_fft: int = 510,
+    stft_hop_length: int = 128,
+    stft_win_length: int = 510,
+    stft_center: bool = False,
+    stft_magnitude_overlap_threshold: float = 0.85,
     return_stats: bool = False,
 ) -> Union[Tensor, Tuple[Tensor, Dict[str, Tensor]]]:
     """
@@ -65,6 +154,18 @@ def target_orthogonal_leakage_loss(
             nuisance window energy가 source 내부 최대값의 이 비율보다 작으면
             비활성 구간으로 제외한다.
 
+        gate_mode:
+            waveform_orthogonal은 기존 waveform projection Gate를 사용한다.
+            stft_magnitude_overlap은 target/nuisance waveform Window의
+            STFT magnitude cosine overlap이 threshold 이하인 Window만 사용한다.
+
+        stft_n_fft, stft_hop_length, stft_win_length, stft_center:
+            STFT magnitude Gate의 파라미터.
+
+        stft_magnitude_overlap_threshold:
+            STFT magnitude overlap 상한. overlap이 이 값 이하인 Window만
+            Gate를 통과한다. waveform threshold와 의미가 다르다.
+
         return_stats:
             True이면 gate ratio 등의 통계도 함께 반환.
 
@@ -76,6 +177,14 @@ def target_orthogonal_leakage_loss(
         raise ValueError("target_activity_threshold must be in [0, 1].")
     if not 0.0 <= float(nuisance_activity_threshold) <= 1.0:
         raise ValueError("nuisance_activity_threshold must be in [0, 1].")
+    gate_mode = str(gate_mode).lower().strip()
+    if gate_mode not in {"waveform_orthogonal", "stft_magnitude_overlap"}:
+        raise ValueError(
+            "gate_mode must be 'waveform_orthogonal' or "
+            f"'stft_magnitude_overlap', got {gate_mode!r}"
+        )
+    if not 0.0 <= float(stft_magnitude_overlap_threshold) <= 1.0:
+        raise ValueError("stft_magnitude_overlap_threshold must be in [0, 1].")
 
     # ---------------------------------------------------------
     # 1. 입력 차원 정리
@@ -267,7 +376,22 @@ def target_orthogonal_leakage_loss(
         / (nuisance_energy + eps)
     )
     # nuisance가 target과 직교했을 때 q_jw가 1로 수렴 (Threshold가 0.1이라서, 너무 낮았던 Issue 존재 / Ratio 중앙값 0.9997058510780334)
-    orthogonal_gate = orthogonal_ratio >= gate_threshold
+    spectral_overlap = None
+    if gate_mode == "stft_magnitude_overlap":
+        spectral_overlap = _stft_magnitude_overlap(
+            target_windows,
+            interferer_windows,
+            n_fft=int(stft_n_fft),
+            hop_length=int(stft_hop_length),
+            win_length=int(stft_win_length),
+            center=bool(stft_center),
+            eps=eps,
+        )
+        orthogonal_gate = spectral_overlap <= float(
+            stft_magnitude_overlap_threshold
+        )
+    else:
+        orthogonal_gate = orthogonal_ratio >= gate_threshold
     # reference_energy는 sample 내부에서 가장 큰 window energy (target/nuisance 각각) Threshold 비율만큼의 window만 activity gate 통과
     target_window_energy = target_energy.squeeze(-1)
     target_reference_energy = target_window_energy.amax(dim=1, keepdim=True)
@@ -319,6 +443,16 @@ def target_orthogonal_leakage_loss(
 
         # nuisance가 target과 얼마나 직교하는지
         "orthogonal_ratio": orthogonal_ratio.mean().detach(),
+        "stft_magnitude_overlap": (
+            spectral_overlap.mean().detach()
+            if spectral_overlap is not None
+            else orthogonal_ratio.new_tensor(float("nan"))
+        ),
+        "stft_magnitude_gate_ratio": (
+            orthogonal_gate.float().mean().detach()
+            if spectral_overlap is not None
+            else orthogonal_ratio.new_tensor(float("nan"))
+        ),
 
         # activity gate를 통과한 target/nuisance window 비율
         "target_activity_ratio": target_active.float().mean().detach(),

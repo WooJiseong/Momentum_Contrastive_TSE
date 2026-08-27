@@ -1,0 +1,47 @@
+# Rerun only the Attn_MOCOCO Stage1 SI-SDR + Leakage experiment.
+# This config intentionally uses a fresh output directory so the failed 893110
+# artifacts remain available for diagnosis.
+
+base_config: ../PN_MOCOCO/configs/config_tfgridnet_supervised.yaml
+
+experiment:
+  name: attn_mococo_stage1_si_sdr_plus_leakage_rerun
+  date: 20260824
+
+train:
+  num_epochs: 200
+  log_dir: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr_leakage_rerun
+
+checkpoint:
+  dir: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr_leakage_rerun/checkpoints
+  ckpt_name: tfgridnet_si_sdr_leakage_rerun_best
+  resume: null
+
+paths:
+  initial_model_ckpt: ../../../checkpoints/proposed-monaural.pt
+  encoder_override_ckpt: exp/20260813_attn_mococo_40frame_lightweight_attention/stage0_moco/checkpoints/pn_encoder_best.pt
+  strict_initial_model: true
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+eval:
+  checkpoint: exp/20260813_attn_mococo_40frame_lightweight_attention/stage1_tfgridnet_si_sdr_leakage_rerun/checkpoints/tfgridnet_si_sdr_leakage_rerun_best.ckpt
+  out_json: exp/20260813_attn_mococo_40frame_lightweight_attention/evaluation/si_sdr_leakage_rerun_results.json
+
+loss:
+  type: si_sdr_plus_target_orthogonal_leakage
+  orthogonal_leakage_weight: 0.1
+  orthogonal_window_size: 2048
+  orthogonal_hop_size: 1024
+  orthogonal_gate_threshold: 0.1
+  orthogonal_eps: 1.0e-8
+  normalize_residual_energy: true
+  activity_gate: true
+  target_activity_threshold: 0.01
+  nuisance_activity_threshold: 0.01
+  verify_nuisance_contract: true
+  fail_on_nonfinite: true

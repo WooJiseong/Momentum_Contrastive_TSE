@@ -22,8 +22,6 @@ from espnet2.torch_utils.get_layer_from_string import get_layer
 from espnet2.enh.separator.tfgridnet_separator import TFGridNet as TFGridNet_original
 from espnet2.enh.separator.tfgridnet_separator import GridNetBlock as GridNetBlock_original
 from asteroid_filterbanks import make_enc_dec
-from torchmetrics.functional import(
-    signal_noise_ratio as snr_loss)
 
 
 class Lambda(nn.Module):

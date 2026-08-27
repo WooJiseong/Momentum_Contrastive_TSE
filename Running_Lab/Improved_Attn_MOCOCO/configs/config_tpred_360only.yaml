@@ -1,0 +1,93 @@
+# Improved Attn t-predictor, trained with the same 360-only Stage0 export.
+# MR-jitter is a Flow loss setting; t-predictor still regresses the physical
+# mixing ratio used at inference.
+
+train:
+  batch_size: 32
+  num_epochs: 40
+  accumulation_steps: 2
+  num_workers: 4
+  log_lr: true
+  precision: bf16-mixed
+  log_dir: exp/20260826_improved_attn_mococo_360only_teacher_decay_mrjitter/tpred/logs
+  log_interval: 50
+  detect_anomaly: false
+  gradient_clip_val: 0.5
+  limit_train_batches: null
+  limit_val_batches: null
+  spectral_aug: false
+
+scheduler:
+  type: CosineAnnealingLR
+  t_max: 40
+  eta_min: 1.0e-5
+  warmup_epochs: 5
+
+model:
+  C: 1024
+
+dataset:
+  n_fft: 510
+  win_length: 510
+  hop_length: 128
+  sample_rate: 16000
+  segment: 3
+  segment_aux: 3
+  stft_scale: 1.0
+  source_num: 3
+  snr_db_range: [-3, 3]
+  clean_enroll: false
+  special_spk: [Partial_Pos, Partial_Neg]
+  partial_range: [0.33, 0.66]
+  neg_partial_range: [1.0, 1.0]
+  active_num: [-1, 1, -1]
+  train_roots:
+    - /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/train-clean-360
+  val_root: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/dev-clean
+  test_root: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/test-clean
+  train_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/tr
+  val_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/cv
+  test_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/tt
+  samples_per_epoch: 30000
+  val_size: 200
+  enroll_exclude_mixture_utt: false
+
+enroll:
+  provider: v2b_pn_encoder
+  time: full
+  v2b_use_pos_emb: true
+
+paths:
+  pn_ckpt: null
+
+optim:
+  optimizer: AdamW
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 4
+  strategy: ddp
+
+seed: 42
+
+early_stopping:
+  enabled: true
+  monitor: val_loss
+  patience: 10
+  verbose: true
+  mode: min
+  delta: 0.0
+
+checkpoint:
+  dir: exp/20260826_improved_attn_mococo_360only_teacher_decay_mrjitter/tpred/checkpoints
+  ckpt_name: improved_attn_360only_tpred_best
+  save_best: true
+  save_last: true
+  verbose: true
+  monitor: val_loss
+  mode: min
+  load_weights_only: false
+  resume: null

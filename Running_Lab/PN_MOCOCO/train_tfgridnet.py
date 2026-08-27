@@ -116,11 +116,13 @@ class LightningModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         est, target, mixture = self._forward_batch(batch)
         loss = neg_si_sdr_loss(est, target)
-        metrics = separation_metrics(est.detach(), target.detach(), mixture.detach())
+        metrics = separation_metrics(
+            est.detach(), target.detach(), mixture.detach(), reference=False
+        )
         bsz = int(target.shape[0])
         self.log("train_loss", loss, on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
-        self.log("train_si_sdr", metrics["si_sdr"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
-        self.log("train_si_sdri", metrics["si_sdri"], on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
+        for key, value in metrics.items():
+            self.log(f"train_{key}", value, on_step=False, on_epoch=True, sync_dist=True, batch_size=bsz)
         return loss
 
     def validation_step(self, batch, batch_idx):

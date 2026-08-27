@@ -14,8 +14,6 @@ from typing import Any, Callable
 import soundfile as sf
 import torch
 import yaml
-from torchmetrics.functional import scale_invariant_signal_distortion_ratio as si_sdr
-from torchmetrics.functional import signal_noise_ratio as snr
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -174,14 +172,6 @@ def batchify(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def maybe_fix_sign(estimate: torch.Tensor, target: torch.Tensor) -> tuple[torch.Tensor, bool]:
-    positive_error = (estimate - target).pow(2).mean(dim=-1)
-    negative_error = (-estimate - target).pow(2).mean(dim=-1)
-    flip = negative_error < positive_error
-    sign = torch.where(flip, -1.0, 1.0).to(estimate.device)
-    return estimate * sign[:, None], bool(flip[0].item())
-
-
 def one_dimensional(wave: torch.Tensor, name: str) -> torch.Tensor:
     wave = wave.detach().float().cpu().squeeze()
     if wave.ndim != 1:
@@ -220,6 +210,8 @@ def main() -> None:
     config_path = Path(args.config).resolve()
     lab_dir = lab_dir_for(config_path)
     add_paths(lab_dir, ROOT, PNFLOW_ROOT)
+    from Base.Code_Snippet.metrics_code import reference_metric_batch
+
     config = read_config(config_path, lab_dir)
     resolve_config_paths(config, lab_dir)
 
@@ -257,7 +249,10 @@ def main() -> None:
     sample_rate = int(config["dataset"]["sample_rate"])
     chunk_samples = int(config.get("inference", {}).get("chunk_samples", sample_rate))
     sign_correction = bool(config.get("eval", {}).get("sign_correction", True))
-    metric_keys = ("si_sdr", "si_sdri", "snr", "snri", "input_si_sdr", "input_snr")
+    metric_keys = (
+        "si_sdr", "si_sdri", "sdr", "sdri", "si_snr", "si_snri",
+        "snr", "snri", "input_si_sdr", "input_sdr", "input_si_snr", "input_snr",
+    )
     totals = {key: 0.0 for key in metric_keys}
     rows: list[dict[str, Any]] = []
 
@@ -270,22 +265,17 @@ def main() -> None:
         positive = ensure_channel(batch["pos_wave"]).to(device).float()
         negative = ensure_channel(batch["neg_wave"]).to(device).float()
         estimate = causal_forward(model, mixture, positive, negative, chunk_samples)
-        sign_flipped = False
-        if sign_correction:
-            estimate, sign_flipped = maybe_fix_sign(estimate, target)
-
         mixture_wave = mixture.squeeze(1)
-        si_out = si_sdr(estimate.float(), target.float(), zero_mean=True)[0]
-        si_in = si_sdr(mixture_wave.float(), target.float(), zero_mean=True)[0]
-        snr_out = snr(estimate.float(), target.float())[0]
-        snr_in = snr(mixture_wave.float(), target.float())[0]
+        metric_batch, estimate, flipped = reference_metric_batch(
+            estimate,
+            target,
+            mixture_wave,
+            sign_correction=sign_correction,
+        )
+        sign_flipped = bool(flipped[0].item())
         values = {
-            "si_sdr": float(si_out.cpu()),
-            "si_sdri": float((si_out - si_in).cpu()),
-            "snr": float(snr_out.cpu()),
-            "snri": float((snr_out - snr_in).cpu()),
-            "input_si_sdr": float(si_in.cpu()),
-            "input_snr": float(snr_in.cpu()),
+            key: float(metric_batch[key][0].cpu())
+            for key in metric_keys
         }
         for key, value in values.items():
             totals[key] += value

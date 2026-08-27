@@ -4,13 +4,17 @@ from pathlib import Path
 
 import torch
 from torch import nn
-from torchmetrics.functional import scale_invariant_signal_distortion_ratio as si_sdr
-from torchmetrics.functional import signal_noise_ratio as snr
 
 from pn_mococo.moco_encoder import ensure_channel, filtered_pn_state
 from pn_mococo.paths import add_repo_paths
 
 add_repo_paths()
+
+from Base.Code_Snippet.metrics_code import (
+    fast_training_metrics,
+    negative_si_sdr_loss,
+    reference_metrics,
+)
 
 from model.GridnetAttnHead import GridNetBlock_attnhead
 from model.tfgridnet_KVfusion import TFGridNet_KVfusion
@@ -157,26 +161,20 @@ def causal_forward(
 
 
 def neg_si_sdr_loss(est: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    est = est.float()
-    target = target.float()
-    return -si_sdr(est, target, zero_mean=True).mean()
+    return negative_si_sdr_loss(est, target)
 
 
 @torch.no_grad()
-def separation_metrics(est: torch.Tensor, target: torch.Tensor, mixture: torch.Tensor) -> dict[str, torch.Tensor]:
-    est = est.float()
-    target = target.float()
-    mixture = mixture.float()
-    out_si = si_sdr(est, target, zero_mean=True)
-    in_si = si_sdr(mixture, target, zero_mean=True)
-    out_snr = snr(est, target)
-    in_snr = snr(mixture, target)
-    return {
-        "si_sdr": out_si.mean(),
-        "si_sdri": (out_si - in_si).mean(),
-        "snr": out_snr.mean(),
-        "snri": (out_snr - in_snr).mean(),
-    }
+def separation_metrics(
+    est: torch.Tensor,
+    target: torch.Tensor,
+    mixture: torch.Tensor,
+    *,
+    reference: bool = True,
+) -> dict[str, torch.Tensor]:
+    if reference:
+        return reference_metrics(est, target, mixture)
+    return fast_training_metrics(est, target, mixture)
 
 
 def checkpoint_exists(path: str | None) -> bool:
