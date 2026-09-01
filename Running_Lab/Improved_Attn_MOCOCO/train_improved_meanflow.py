@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--stage0-ckpt", default=os.environ.get("STAGE0_CKPT"))
     parser.add_argument(
         "--run-root",
-        default=None,
+        default=os.environ.get("RUN_ROOT"),
         help="Override this run's log/checkpoint root without changing the read-only SIA config.",
     )
     return parser.parse_args()

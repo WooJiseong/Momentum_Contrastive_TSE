@@ -1,0 +1,115 @@
+# Improved Attn Stage0 for the paper-matched 360-only final pipeline.
+
+experiment:
+  name: ablation_teacher_weight_0p0_360only
+  date: 20260828
+  base_checkpoint: checkpoints/improved-monaural.pt
+  encoder_variant: USEF-TFGridNet-improved
+
+train:
+  batch_size: 2
+  num_epochs: 300
+  accumulation_steps: 4
+  num_workers: 4
+  log_lr: true
+  precision: bf16-mixed
+  log_dir: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Ablation/Teacher_Weight/tcr_Weight0p0/logs
+  log_interval: 20
+  gradient_clip_val: 0.5
+
+encoder:
+  num_blocks: 1
+  head_layers: 2
+  binaural: false
+
+contrastive:
+  initial_pn_ckpt: checkpoints/improved-monaural.pt
+  strict_init: true
+  train_encoder: true
+  train_encoder_head: true
+  encoder_lr_scale: 0.03
+  positive_key: source
+  temperature: 0.10
+  ema_momentum_base: 0.997
+  ema_momentum_final: 1.0
+  use_queue: true
+  queue_size: 4096
+  speaker_aware_queue: true
+  teacher_loss_weight: 0.0
+  teacher_loss_weight_start: 0.0
+  teacher_loss_weight_end: 0.0
+  teacher_loss_weight_schedule: constant
+  projection:
+    in_ch: 64
+    in_freq: 65
+    hidden_dim: 2048
+    emb_dim: 256
+    nlayers: 3
+    use_bn: false
+    pooling_size: 40
+    pooling_stride: 40
+    gate_hidden_dim: 64
+    gate_temperature: 1.0
+
+augment:
+  gain_range: [0.80, 1.25]
+  noise_std_weak: 0.00
+  noise_std_strong: 0.005
+  mask_prob_weak: 0.10
+  mask_prob_strong: 0.25
+  mask_max_ratio: 0.15
+  shift_max_ratio: 0.01
+
+optim:
+  optimizer: AdamW
+  lr: 1.0e-4
+  weight_decay: 0.04
+
+scheduler:
+  type: CosineAnnealingLR
+  t_max: 300
+  eta_min: 1.0e-6
+  warmup_epochs: 15
+
+checkpoint:
+  dir: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Ablation/Teacher_Weight/tcr_Weight0p0/checkpoints
+  ckpt_name: ablation_teacher_weight_0p0
+  save_best: 1
+  save_last: true
+  monitor: val_loss
+  mode: min
+  resume: null
+
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 4
+  strategy: ddp
+  find_unused_parameters: false
+  broadcast_buffers: false
+
+dataset:
+  n_fft: 510
+  win_length: 510
+  hop_length: 128
+  sample_rate: 16000
+  segment: 3
+  segment_aux: 3
+  stft_scale: 1.0
+  source_num: 3
+  snr_db_range: [-3, 3]
+  clean_enroll: false
+  special_spk: [Partial_Pos, Partial_Neg]
+  partial_range: [0.33, 0.66]
+  neg_partial_range: [1.0, 1.0]
+  active_num: [-1, 1, -1]
+  train_roots: [LibriSpeech/train-clean-360]
+  val_root: LibriSpeech/dev-clean
+  test_root: LibriSpeech/test-clean
+  train_noise: wham_noise/tr
+  val_noise: wham_noise/cv
+  test_noise: wham_noise/tt
+  samples_per_epoch: 10000
+  val_size: 200
+
+seed: 42

@@ -83,3 +83,14 @@ projection 크기, queue, EMA, optimizer 및 Stage1 decoder는 고정 실험과
 동일하게 유지한다. Stage1은 새 Stage0 Best export를 사용하며, 로그와
 checkpoint는 `20260824_improved_attn_mococo_teacher_cosine_0p1_to_0p03` 아래에
 분리한다.
+## 2026-08-27 Improved_Attn epoch-85 Best Stage1
+
+현재 Stage0가 epoch 85까지 도달한 시점의 `improved_attn_360only_teacher_decay_best.ckpt`
+및 exported `pn_encoder_best.pt`를 고정해 별도 Stage1을 구성한다. Stage0 학습이
+이후 계속되어도 Stage1 입력 checkpoint는 변경되지 않는다.
+
+- Stage0 source: `exp/20260826_improved_attn_mococo_360only_teacher_decay_mrjitter/stage0_moco/checkpoints/pn_encoder_best.pt`
+- Frozen copy: `exp/20260827_improved_attn_85ep_best_mrjitter/stage0_input/pn_encoder_best_at_epoch85.pt`
+- Stage1: `sia_fm_tse` Flow Generator, 360-only, `loss.gamma=0.0`
+- MR-jitter: `enabled=true`, `sigma=0.25`
+- DDP: one node, 4 A10 GPUs
