@@ -1,6 +1,6 @@
 # dso 사용 모델
 train:
-  batch_size: 2
+  batch_size: 4
   num_epochs: 2000
   accumulation_steps: 1
   num_workers: 4
