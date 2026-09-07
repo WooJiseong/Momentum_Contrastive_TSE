@@ -106,10 +106,10 @@ enroll:
   cond_mode: cross_attn
   v2b_use_pos_emb: true
   pn_ckpt: checkpoints/proposed-monaural.pt
-  t_predicter_ckpt: checkpoints/t_predicter_best.ckpt
+  t_predicter_ckpt: null
 paths:
   pn_ckpt: checkpoints/proposed-monaural.pt
-  t_predicter_ckpt: checkpoints/t_predicter_best.ckpt
+  t_predicter_ckpt: null
 optim:
   optimizer: AdamW
   lr: 5.0e-05
