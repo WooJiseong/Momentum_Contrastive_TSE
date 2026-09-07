@@ -14,6 +14,9 @@ set -euo pipefail
 LAB_DIR="/gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Soft_MOCOCO_SamplingBug_fixed"
 export MASTER_PORT="${MASTER_PORT:-30710}"
 export NUMBA_CACHE_DIR="${NUMBA_CACHE_DIR:-/tmp/soft_sampling_fixed_360_${USER:-user}}"
-unset RESUME_CKPT
+export RESUME_CKPT="$LAB_DIR/exp/20260901_soft_sampling_fixed_360/stage0_moco/checkpoints/last.ckpt"
+if [[ ! -f "$RESUME_CKPT" ]]; then
+    unset RESUME_CKPT
+fi
 mkdir -p "$LAB_DIR/exp/20260901_soft_sampling_fixed_360/stage0_moco/checkpoints"
 exec bash "$LAB_DIR/script/run_stage0.sh" "$LAB_DIR/configs/config_soft_sampling_fixed_360.yaml"

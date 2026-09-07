@@ -1,14 +1,14 @@
-# Soft_MOCOCO Best Stage0 -> MR-jitter Flow Stage1.
-# This run uses train-clean-360 only for paper-faithful comparison.
+# DSnOS Stage0 encoder + MR-jitter Stage1 with Base/Code_Snippet/dualdso_loss.py.
+# All data/model/training settings match config_flow_mrjitter_gamma0_360only.
 
 train:
   batch_size: 2
-  num_epochs: 2000
-  accumulation_steps: 1
+  num_epochs: 1
+  accumulation_steps: 2
   num_workers: 4
   log_lr: true
   precision: bf16-mixed
-  log_dir: exp/20260826_soft_mococo_best_mrjitter_360only/logs
+  log_dir: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/flow_dualdso_gamma0/logs/smoke_2gpu
   log_interval: 50
   detect_anomaly: false
   gradient_clip_val: 0.5
@@ -18,12 +18,12 @@ train:
 
 scheduler:
   type: CosineAnnealingLR
-  t_max: 157
+  t_max: 1
   eta_min: 1.0e-5
   warmup_epochs: 2
 
 loss:
-  gamma: 1.0
+  gamma: 0.0
   endpoint_aux:
     enabled: false
     sisdr_weight: 0.0
@@ -79,21 +79,19 @@ dataset:
   train_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/tr
   val_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/cv
   test_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/tt
-  samples_per_epoch: 30000
+  samples_per_epoch: 200
   val_size: 200
-  enroll_exclude_mixture_utt: false
 
 enroll:
-  provider: v2b_pn_encoder
   provider: v2b_pn_encoder
   time: full
   cond_mode: cross_attn
   v2b_use_pos_emb: true
-  pn_ckpt: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Soft_MOCOCO/exp/20260801_soft_mococo/stage0_moco/checkpoints/pn_encoder_best.pt
+  pn_ckpt: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/dsnos_best_epoch208_pn_encoder.pt
   t_predicter_ckpt: null
 
 paths:
-  pn_ckpt: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/Soft_MOCOCO/exp/20260801_soft_mococo/stage0_moco/checkpoints/pn_encoder_best.pt
+  pn_ckpt: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/dsnos_best_epoch208_pn_encoder.pt
   t_predicter_ckpt: null
 
 optim:
@@ -104,7 +102,7 @@ optim:
 ddp:
   use_ddp: true
   num_nodes: 1
-  num_gpus: 4
+  num_gpus: 2
   strategy: ddp
 
 seed: 42
@@ -118,8 +116,8 @@ early_stopping:
   delta: 0.0
 
 checkpoint:
-  dir: exp/20260826_soft_mococo_best_mrjitter_360only/checkpoints
-  ckpt_name: meanflow_soft_best_mrjitter_360only_best
+  dir: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/flow_dualdso_gamma0/checkpoints_smoke_2gpu
+  ckpt_name: dsnos_flow_dualdso_gamma0_smoke_best
   save_best: true
   save_last: true
   verbose: true
@@ -133,7 +131,7 @@ checkpoint:
     verbose: true
 
 eval:
-  checkpoint: exp/20260826_soft_mococo_best_mrjitter_360only/checkpoints/meanflow_soft_best_mrjitter_360only_best.ckpt
+  checkpoint: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/flow_dualdso_gamma0/checkpoints/dsnos_flow_dualdso_gamma0_smoke_best.ckpt
   test_n: 5000
 
 t_predicter:
@@ -141,4 +139,4 @@ t_predicter:
 
 mr_jitter:
   enabled: true
-  sigma: 0.25
+  sigma: 0.15

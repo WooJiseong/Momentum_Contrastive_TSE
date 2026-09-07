@@ -1,0 +1,133 @@
+# DSnOS Stage0 encoder + original PN-MOCOCO TFGridNet Stage1.
+
+experiment:
+  name: dsnos_moco_stage1_tfgridnet_default_360only
+  date: 20260906
+
+train:
+  batch_size: 2
+  num_epochs: 200
+  accumulation_steps: 8
+  num_workers: 4
+  log_lr: true
+  precision: bf16-mixed
+  log_dir: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/tfgridnet_default/logs
+  log_interval: 20
+  detect_anomaly: false
+  gradient_clip_val: 0.5
+  limit_train_batches: null
+  limit_val_batches: null
+  overfit_batches: 0.0
+
+scheduler:
+  type: CosineAnnealingLR
+  t_max: 200
+  eta_min: 1.0e-6
+  warmup_epochs: 5
+
+model:
+  type: tfgridnet_causal
+  n_fft: 128
+  stride: 64
+  n_layers: 3
+  lstm_hidden_units: 64
+  emb_dim: 64
+  emb_ks: 1
+  model_normalize: true
+  pooling_size: 40
+  fusion_stride: 40
+  fusion_layer: [0, 1]
+  binaural: false
+
+encoder:
+  n_fft: 128
+  stride: 64
+  num_blocks: 3
+  head_layers: 2
+  binaural: false
+
+paths:
+  initial_model_ckpt: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/checkpoints/proposed-monaural.pt
+  strict_initial_model: true
+  encoder_override_ckpt: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/dsnos_best_epoch208_pn_encoder.pt
+  strict_encoder_override: true
+
+trainable:
+  encoder: false
+  encoder_head: false
+  separator: true
+
+dataset:
+  n_fft: 510
+  win_length: 510
+  hop_length: 128
+  sample_rate: 16000
+  segment: 3
+  segment_aux: 3
+  stft_scale: 1.0
+  source_num: 3
+  snr_db_range: [-3, 3]
+  clean_enroll: false
+  special_spk: [Partial_Pos, Partial_Neg]
+  partial_range: [0.33, 0.66]
+  neg_partial_range: [1.0, 1.0]
+  active_num: [-1, 1, -1]
+  train_roots:
+    - /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/train-clean-360
+  val_root: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/dev-clean
+  test_root: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/LibriSpeech/test-clean
+  train_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/tr
+  val_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/cv
+  test_noise: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/data/wham_noise/tt
+  samples_per_epoch: 10000
+  val_size: 200
+
+enroll:
+  provider: v2b_pn_encoder
+  time: full
+  v2b_use_pos_emb: true
+
+optim:
+  optimizer: AdamW
+  lr: 1.0e-4
+  separator_lr: 1.0e-4
+  encoder_lr: 3.0e-6
+  encoder_head_lr: 1.0e-5
+  weight_decay: 0.01
+
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 2
+  strategy: ddp
+  find_unused_parameters: false
+  broadcast_buffers: false
+
+seed: 42
+
+early_stopping:
+  enabled: false
+  monitor: val_loss
+  patience: 20
+  verbose: true
+  mode: min
+  delta: 0.0
+
+checkpoint:
+  dir: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/tfgridnet_default/checkpoints
+  ckpt_name: dsnos_tfgridnet_default_best
+  save_best: 1
+  save_last: true
+  verbose: true
+  monitor: val_loss
+  mode: min
+  resume: null
+
+eval:
+  checkpoint: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/tfgridnet_default/checkpoints/dsnos_tfgridnet_default_best.ckpt
+  out_json: /gpfs/home1/wjs6800/SIALab/PNFlowTSE/contrastive_momentum/Running_Lab/DSnOS_MOCO_Stage1/exp/20260906_dsnos_moco_stage1/tfgridnet_default/evaluation/results.json
+  mode: fixed_count
+  test_n: 5000
+  batch_size: 4
+  num_workers: 2
+  sign_correction: true
