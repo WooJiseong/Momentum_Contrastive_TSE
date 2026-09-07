@@ -1,0 +1,41 @@
+# experiment outputs
+exp/*
+!exp/.gitkeep
+
+logs/*
+!logs/.gitkeep
+
+# checkpoints / weights
+*.ckpt
+*.pt
+*.pth
+
+# tensorboard
+events.out.tfevents.*
+tb_*/
+
+# evaluation outputs
+*.jsonl
+*.wav
+*.flac
+
+# datasets
+LibriSpeech/
+wham_noise/
+data/LibriSpeech/
+data/wham_noise/
+data/downloads/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# environment/editor
+.env
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

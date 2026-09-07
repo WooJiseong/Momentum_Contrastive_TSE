@@ -1,0 +1,152 @@
+# 베이스라인 (dso 안쓴거)
+train:
+  batch_size: 2
+  num_epochs: 2000
+  accumulation_steps: 1
+  num_workers: 4
+  log_lr: true
+  precision: bf16-mixed
+  log_dir: exp/flow_depth8_ddp4_gbs8_bpg2_scratch_157e_v13R_DDP4FIX
+  log_interval: 50
+  detect_anomaly: false
+  gradient_clip_val: 0.5
+  limit_train_batches: null
+  limit_val_batches: null
+  overfit_batches: 0.0
+scheduler:
+  type: CosineAnnealingLR
+  t_max: 50
+  eta_min: 1.0e-05
+  warmup_epochs: 2
+  lr_reduce_patience: 20
+  lr_reduce_factor: 0.5
+  start_epoch: 0
+loss:
+  gamma: 0.0
+  endpoint_aux:
+    enabled: false
+    sisdr_weight: 0.0
+    mrstft_weight: 0.0
+    warmup_epochs: 5
+    aux_batch_size: 1
+    mrstft_resolutions:
+    - - 256
+      - 64
+      - 256
+    - - 512
+      - 128
+      - 512
+    - - 1024
+      - 256
+      - 1024
+    leak_weight: 0.0
+
+solver:
+  step_size: 1.0
+  test_step_size: 1.0
+  method: euler
+meanflow:
+  flow_ratio: 1.0
+  alpha_schedule_start_epoch: 0
+  alpha_schedule_end_epoch: null
+  alpha_gamma: 25.0
+  alpha_min: 0.005
+validation:
+  sample_steps: 16
+  nfe_list:
+  - 1
+model:
+  input_dim: 512
+  output_dim: 512
+  pos_method: none
+  pos_length: 500
+  hidden_size: 512
+  depth: 8
+  num_heads: 8
+  cond_mode: cross_attn
+  cond_dim: 512
+dataset:
+  n_fft: 510
+  win_length: 510
+  hop_length: 128
+  sample_rate: 16000
+  segment: 3
+  segment_aux: 3
+  stft_scale: 1.0
+  source_num: 3
+  snr_db_range:
+  - -3
+  - 3
+  clean_enroll: false
+  special_spk:
+  - Partial_Pos
+  - Partial_Neg
+  partial_range:
+  - 0.33
+  - 0.66
+  neg_partial_range:
+  - 1.0
+  - 1.0
+  active_num:
+  - -1
+  - 1
+  - -1
+  train_roots:
+  - LibriSpeech/train-clean-360
+  val_root: LibriSpeech/dev-clean
+  test_root: LibriSpeech/test-clean
+  train_noise: wham_noise/tr
+  val_noise: wham_noise/cv
+  test_noise: wham_noise/tt
+  samples_per_epoch: 30000
+  val_size: 200
+enroll:
+  provider: v2b_pn_encoder
+  time: full
+  cond_mode: cross_attn
+  v2b_use_pos_emb: true
+  pn_ckpt: checkpoints/proposed-monaural.pt
+  t_predicter_ckpt: checkpoints/t_predicter_best.ckpt
+paths:
+  pn_ckpt: checkpoints/proposed-monaural.pt
+  t_predicter_ckpt: checkpoints/t_predicter_best.ckpt
+optim:
+  optimizer: AdamW
+  lr: 5.0e-05
+  weight_decay: 0.01
+ddp:
+  use_ddp: true
+  num_nodes: 1
+  num_gpus: 2
+  strategy: ddp
+seed: 42
+early_stopping:
+  enabled: false
+  monitor: val_loss
+  patience: 50
+  verbose: true
+  mode: min
+  delta: 0.0
+checkpoint:
+  dir: exp/flow_depth8_ddp4_gbs8_bpg2_scratch_157e_v13R_DDP4FIX/checkpoints
+  ckpt_name: best
+  save_best: true
+  save_last: true
+  verbose: true
+  monitor: val_loss
+  mode: min
+  load_weights_only: false
+  resume: null
+eval:
+  checkpoint: exp/flow_depth8_ddp4_gbs8_bpg2_scratch_157e_v13R_DDP4FIX/checkpoints/best.ckpt
+  test_n: 100
+t_predicter:
+  C: 1024
+baseline:
+  si_sdr: 1.716
+  si_sdri: 8.128
+  pesq: 1.49
+  stoi: 0.679
+mr_jitter:
+  enabled: true
+  sigma: 0.15
